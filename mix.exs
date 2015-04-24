@@ -7,7 +7,8 @@ defmodule OpenAperture.Router.Mixfile do
     [app: :openaperture_router,
      version: get_version,
      elixir: "~> 1.0",
-     deps: deps]
+     deps: deps,
+     test_coverage: [tool: ExCoveralls]]
   end
 
   # Generate a project version with the first 10 characters of the commit hash.
@@ -36,7 +37,8 @@ defmodule OpenAperture.Router.Mixfile do
       {:httparrot, "~>0.3.4", only: :test},
       {:meck, "0.8.2", only: :test},
       {:openaperture_auth, github: "OpenAperture/auth"},
-      {:shouldi, "0.2.1", only: :test}
+      {:shouldi, "0.2.1", only: :test},
+      {:excoveralls, "~>0.3.9", only: :test}
     ]
   end
 end

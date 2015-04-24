@@ -27,9 +27,6 @@ defmodule OpenAperture.Router.RequestIntegrationTest do
   end
 
   setup_all do
-    Application.put_env(:httparrot, :http_port, 4007, persistent: true)
-    {:ok, _} = :application.ensure_all_started(:httparrot)
-
     # Add a host:port->route_host:port mapping for our httparrot server
     ConCache.put(:routes, "localhost:8080", [{"localhost", 4007, false}])
     :ok

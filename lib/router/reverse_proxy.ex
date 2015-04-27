@@ -3,6 +3,8 @@ defmodule OpenAperture.Router.ReverseProxy do
 
   import OpenAperture.Router.HttpRequestUtil
 
+  alias OpenAperture.Router.BackendRequestServer
+
   @type cowboy_req :: tuple
   @type headers :: [{String.t, String.t}]
 
@@ -37,7 +39,7 @@ defmodule OpenAperture.Router.ReverseProxy do
     # behavior." (http://ninenines.eu/docs/en/cowboy/1.0/manual/cowboy_req/)
     #
     # So, we need to have the child process (which handles connecting to the
-    # backed), send us messages whenever it gets data from the backend, so that
+    # backend), send us messages whenever it gets data from the backend, so that
     # we can turn around and send that data to the client.
     {host, req} = :cowboy_req.host(req)
     {port, req} = :cowboy_req.port(req)
@@ -57,64 +59,79 @@ defmodule OpenAperture.Router.ReverseProxy do
         {url, req} = get_backend_url(req, backend_host, backend_port, is_https)
 
         # Start performing the backend request in a separate process
-        backend_request_pid = spawn(OpenAperture.Router.BackendRequest, :make_request, [self, method, url, headers])
+        {:ok, backend_request_server_pid} = GenServer.start(BackendRequestServer, self)
 
-        # Start listening for messages from our backend request
-        message_loop(req, backend_request_pid, :connecting)
+        has_body = Enum.any?(headers, fn {header, _value} ->
+          header = String.downcase(header)
+          header == "content-length" || header == "transfer-encoding"
+        end)
+
+        result = BackendRequestServer.start_request(backend_request_server_pid, method, url, headers, has_body)
+        case result do
+          {:error, reason} ->
+            Logger.error "An error occurred initiating the request to #{url}: #{inspect reason}"
+            # TODO: Maybe retry the request?
+            {_reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [503, [], "", req])
+            {result, req, 0}
+          :ok ->
+            if has_body do
+              # We need to send the request body
+              case send_body(req, backend_request_server_pid) do
+                {:ok, req, _time} ->
+                  message_loop(req, backend_request_server_pid, :waiting_for_response)
+                {:error, reason, req, time} ->
+                  {:error, reason, req, time}
+              end
+            else
+              message_loop(req, backend_request_server_pid, :waiting_for_response)
+            end
+        end
+    end
+  end
+
+  @spec send_body(cowboy_req, pid, integer) :: {:ok, cowboy_req, integer} | {:error, any, cowboy_req, integer}
+  defp send_body(req, backend_request_server_pid, time \\ 0) do
+    {req_time, result} = :timer.tc(:cowboy_req, :body, [req, [length: 4096, read_length: 4096]])
+    case result do
+       {:error, reason} ->
+        Logger.error "Error retrieving request body: #{inspect reason}"
+        {:error, reason, req, time}
+
+      {:more, chunk, req} ->
+        case BackendRequestServer.send_request_chunk(backend_request_server_pid, chunk, false) do
+          :ok ->
+            send_body(req, backend_request_server_pid, time + req_time)
+          {:error, reason} ->
+            Logger.error "Error sending request body chunk to backend server: #{inspect reason}"
+            # TODO: Retry?
+            {:error, reason, req, time + req_time}
+        end
+      {:ok, chunk, req} ->
+        case BackendRequestServer.send_request_chunk(backend_request_server_pid, chunk, true) do
+          :ok ->
+            {:ok, req, time + req_time}
+          {:error, reason} ->
+            Logger.error "Error sending *final* request body chunk to backend server: #{inspect reason}"
+            {:error, reason, req, time + req_time}
+        end
     end
   end
 
   # Message Loop stages:
-  # :connecting
-  # :sending_request_body
   # :waiting_for_response
   # :receiving_response
+  @spec message_loop(cowboy_req, pid, atom, Map.t) :: {:ok, cowboy_req, integer} | {:error, cowboy_req, integer}
   defp message_loop(req, backend_request_pid, stage, state \\ %{}) do
     timeout = Keyword.get(@timeouts, stage, 5_000)
 
     receive do
-      {:error, ^backend_request_pid, _reason, time} ->
+      {:backend_request_error, ^backend_request_pid, _reason} ->
         # Todo: See if we can glean some information from the `reason` param
         # which might allow us to set a more helpful status code.
-        {:error, req, time}
+        # TODO: fix time
+        {:error, req, 0}
 
-      {:connected, ^backend_request_pid, send_body} ->
-        # The backend request process has initiated a request with the backend
-        # server, so now we need to either wait for a response or start
-        # streaming request body data.
-        if send_body do
-          case send_request_body_chunk(req, backend_request_pid) do
-            {:error, _reason, req, send_time} ->
-              # Todo: process error
-              {:error, req, send_time}
-            {:ok, req, _send_time} ->
-              # Loop, we'll either get messages requesting more body data or
-              # a message indicating we should start sending a response
-              message_loop(req, backend_request_pid, :sending_request_body)
-          end
-        else
-          # No request body needs to be sent, so just wait for a response
-          message_loop(req, backend_request_pid, :waiting_for_response)
-        end
-
-      {:ready_for_body, ^backend_request_pid} ->
-        # The backend request process has sent the previous chunk and is
-        # ready to send more
-        case send_request_body_chunk(req, backend_request_pid) do
-          {:error, _reason, req, send_time} ->
-            # Todo: process error
-            {:error, req, send_time}
-          {:ok, req, _send_time} ->
-            # Loop, we'll either get messages requesting more body data or
-            # message indicating we're waiting for the response from the
-            # backend server.
-            message_loop(req, backend_request_pid, :sending_request_body)
-        end
-
-      {:waiting_for_response, ^backend_request_pid} ->
-        message_loop(req, backend_request_pid, :waiting_for_response)
-
-      {:initial_response, ^backend_request_pid, {status_code, status_reason, response_headers}, time} ->
+      {:backend_request_initial_response, ^backend_request_pid, status_code, status_reason, response_headers} ->
         if chunked_request?(response_headers) do
           status = get_response_status(status_code, status_reason)
           {_reply_time, {:ok, req}} = :timer.tc(:cowboy_req, :chunked_reply, [status, response_headers, req])
@@ -134,7 +151,8 @@ defmodule OpenAperture.Router.ReverseProxy do
             {_reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, response_headers, "", req])
             Process.unlink(backend_request_pid)
             Process.exit(backend_request_pid, :normal)
-            {result, req, time}
+            # TODO: Fix time
+            {result, req, 0}
           else
             # Otherwise, we need to buffer or stream the response body
             # TODO: Determine if we can buffer the response, or if we need to
@@ -149,7 +167,7 @@ defmodule OpenAperture.Router.ReverseProxy do
           end
         end
 
-      {:response_chunk, ^backend_request_pid, chunk} ->
+      {:backend_request_response_chunk, ^backend_request_pid, chunk} ->
         case state[:response_type] do
           :chunked ->
             {_result, _send_time} = send_response_body_chunk(req, chunk)
@@ -167,12 +185,13 @@ defmodule OpenAperture.Router.ReverseProxy do
 
         end
 
-      {:response_done, ^backend_request_pid, time} ->
+      {:backend_request_done, ^backend_request_pid} ->
         case state[:response_type] do
           :chunked ->
             # Cowboy should close the connection for us, so all we should need
             # to do here is return, closing out the message loop.
-            {:ok, req, time}
+            # TODO: Fix time
+            {:ok, req, 0}
           :buffered ->
             # We've buffed the whole response, so now we're ready to reply to
             # the client
@@ -181,7 +200,8 @@ defmodule OpenAperture.Router.ReverseProxy do
             status = get_response_status(state)
             {_reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, state[:response_headers], body, req])
 
-            {result, req, time}
+            # TODO: Fix time
+            {result, req, 0}
           # TODO: streaming
           # :streaming ->
         end
@@ -192,27 +212,8 @@ defmodule OpenAperture.Router.ReverseProxy do
     end
   end
 
-  # Broken out into a separate function to keep the message loop tidy
-  # Returns {:ok, req} | {:error, reason, req}
-  defp send_request_body_chunk(req, backend_request_pid) do
-    {time, result} = :timer.tc(:cowboy_req, :body, [req, [length: 4096, read_length: 4096]])
-    case result do
-      {:error, reason} ->
-        Logger.error "Error retrieving request body: #{inspect reason}"
-        {:error, reason, req, time}
-
-      {:more, chunk, req} ->
-        send(backend_request_pid, {:request_body_chunk, self, chunk})
-        {:ok, req, time}
-
-      {:ok, chunk, req} ->
-        send(backend_request_pid, {:final_body_chunk, self, chunk})
-        {:ok, req, time}
-    end
-  end
-
   # Send the chunk from the backend server down to the client
-  # Returns :ok | {:error, reason}
+  @spec send_response_body_chunk(cowboy_req, String.t) :: {:ok, integer} | {:error, integer}
   defp send_response_body_chunk(req, chunk) do
     {time, result} = :timer.tc(:cowboy_req, :chunk, [chunk, req])
     case result do
@@ -225,19 +226,21 @@ defmodule OpenAperture.Router.ReverseProxy do
 
   # Retrieves a status code plus a custom status reason message, if a custom
   # reason is provided from the backend server.
+  @spec get_response_status(Map.t) :: String.t
   defp get_response_status(%{status_code: status_code} = state) do
     if Map.has_key?(state, :status_reason) do
       get_response_status(status_code, state[:status_reason])
     else
-      status_code
+      Integer.to_string(status_code)
     end
   end
 
+  @spec get_response_status(integer, String.t) :: String.t
   defp get_response_status(status_code, status_reason) do
     if status_reason != nil && String.length(status_reason) > 0 do
       "#{status_code} #{status_reason}"
     else
-      status_code
+      Integer.to_string(status_code)
     end
   end
 

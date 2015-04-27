@@ -88,25 +88,25 @@ defmodule OpenAperture.Router.BackendRequestServer do
     Logger.debug("Client #{inspect client_ref} received response headers: #{inspect headers}")
     # Send info to the parent reverse proxy process with the initial response data
     response = state[:response]
-    send(parent, {:backend_request_initial_response, response[:status_code], response[:reason], headers})
+    send(parent, {:backend_request_initial_response, self, response[:status_code], response[:reason], headers})
     # We don't need that response map anymore, so ditch it
     {:noreply, Map.delete(state, :response)}
   end
 
   def handle_info({:hackney_response, client_ref, :done}, %{parent_pid: parent} = state) do
     Logger.debug("Client #{inspect client_ref} received hackney message indicating the request has completed. Shutting down BackendRequestServer GenServer...")
-    send(parent, :backend_request_done)
+    send(parent, {:backend_request_done, self})
     {:stop, :normal, state}
   end
 
   def handle_info({:hackney_response, client_ref, {:error, error}}, %{parent_pid: parent} = state) do
     Logger.error("Client #{inspect client_ref} received hackney error: #{inspect error}")
-    send(parent, {:backend_request_error, error})
+    send(parent, {:backend_request_error, self, error})
     {:noreply, state}
   end
 
   def handle_info({:hackney_response, _client_ref, chunk}, %{parent_pid: parent} = state) do
-    send(parent, {:backend_request_response_chunk, chunk})
+    send(parent, {:backend_request_response_chunk, self, chunk})
     {:noreply, state}
   end
 

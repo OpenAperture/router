@@ -28,15 +28,16 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
     end
 
     should "receive a set of messages after making a request", context do
-      result = BackendRequestServer.start_request(context[:server_pid], :get, get_httparrot_http_base_url, [], false)
+      pid = context[:server_pid]
+      result = BackendRequestServer.start_request(pid, :get, get_httparrot_http_base_url, [], false)
       assert result == :ok
 
-      assert_receive({:backend_request_initial_response, status, _reason, _headers})
+      assert_receive({:backend_request_initial_response, ^pid, status, _reason, _headers})
       assert status == 200
 
-      assert_receive({:backend_request_response_chunk, chunk})
+      assert_receive({:backend_request_response_chunk, ^pid, _chunk})
 
-      assert_receive(:backend_request_done)
+      assert_receive({:backend_request_done, ^pid})
     end
 
     should "send request chunks from the client", context do
@@ -48,19 +49,21 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
       assert result == :ok
 
       result = BackendRequestServer.send_request_chunk(pid, "the last chunk\n", true)
+      assert result == :ok
 
-      assert_receive({:backend_request_initial_response, status, _reason, _headers})
+      assert_receive({:backend_request_initial_response, ^pid, status, _reason, _headers})
       assert status == 200
 
-      assert_receive({:backend_request_response_chunk, chunk})
-      assert_receive(:backend_request_done)
+      assert_receive({:backend_request_response_chunk, ^pid, _chunk})
+      assert_receive({:backend_request_done, ^pid})
     end
 
     should "send an error message if it receives a hackney error", context do
+      pid = context[:server_pid]
       error = "An error message!!!!"
-      send context[:server_pid], {:hackney_response, :a_client_ref, {:error, error}}
+      send pid, {:hackney_response, :a_client_ref, {:error, error}}
 
-      assert_receive({:backend_request_error, ^error})
+      assert_receive({:backend_request_error, ^pid, ^error})
     end
   end
 
@@ -96,7 +99,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
         send pid, {:hackney_response, :client, {:status, 200, "OK"}}
         send pid, {:hackney_response, :client, {:headers, headers}}
 
-        assert_receive({:backend_request_initial_response, 200, "OK", ^headers})
+        assert_receive({:backend_request_initial_response, ^pid, 200, "OK", ^headers})
         assert Process.alive?(pid)
       end
 
@@ -105,9 +108,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
         pid = context[:server_pid]
 
         send pid, {:hackney_response, :client, chunk}
-
-        assert_receive({:backend_request_response_chunk, ^chunk})
-
+        assert_receive({:backend_request_response_chunk, ^pid, ^chunk})
         assert Process.alive?(pid)
       end
 
@@ -115,7 +116,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
         pid = context[:server_pid]
         send pid, {:hackney_response, :client, :done}
 
-        assert_receive(:backend_request_done)
+        assert_receive({:backend_request_done, ^pid})
         # Give it a moment to shut down
         :timer.sleep(100)
         refute Process.alive?(pid)
@@ -126,7 +127,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
         error = "OH NO!"
         send pid, {:hackney_response, :client, {:error, error}}
 
-        assert_receive({:backend_request_error, ^error})
+        assert_receive({:backend_request_error, ^pid, ^error})
         assert Process.alive?(pid)
       end
     end

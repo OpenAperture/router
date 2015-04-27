@@ -110,7 +110,7 @@ defmodule OpenAperture.Router.RequestIntegrationTest do
   # HTTParrot's /stream/:n endpoint will stream 
   # (with transfer-encoding: chunked) n response body objects.
 
-  test "streaming response test" do
+  test "chunked response test" do
     num_streams = 87
     {:ok, response} = request_streaming_response(:get, "http://localhost:8080/stream/#{num_streams}")
     assert response.status_code == 200
@@ -136,7 +136,7 @@ defmodule OpenAperture.Router.RequestIntegrationTest do
     assert body["data"] == sixteen_meg_binary
   end
 
-  test "big streaming post test" do
+  test "big chunked post test" do
     # Since we're using an embedded HTTParrot, which in turn uses Cowboy,
     # we're stuck with the default cowboy limit of 8 MB on streaming requests.
     # Weirdly, cowboy doesn't limit the size of non-streaming requests...

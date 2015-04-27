@@ -10,6 +10,7 @@ defmodule OpenAperture.Router.BackendRequestServer do
   import OpenAperture.Router.Util
 
   @type headers :: [{String.t, String.t}]
+  @type time :: integer
 
   ## Client API
   @doc """
@@ -17,7 +18,7 @@ defmodule OpenAperture.Router.BackendRequestServer do
   backend url, the set of request headers, and a boolean flag indicating that
   it should prepare to stream a request body.
   """
-  @spec start_request(pid, atom, String.t, headers, boolean) :: :ok | {:error, any}
+  @spec start_request(pid, atom, String.t, headers, boolean) :: {:ok, time} | {:error, any, time}
   def start_request(pid, method, url, request_headers, has_request_body) do
     GenServer.call(pid, {:start_request, method, url, request_headers, has_request_body})
   end
@@ -26,7 +27,7 @@ defmodule OpenAperture.Router.BackendRequestServer do
   Send a chunk of the request body to the backend server. The `is_last_chunk`
   flag is used to indicate that there are no more body chunks to be sent.
   """
-  @spec send_request_chunk(pid, String.t, boolean) :: :ok | {:error, any}
+  @spec send_request_chunk(pid, String.t, boolean) :: {:ok, time} | {:error, any, time}
   def send_request_chunk(pid, chunk, is_last_chunk) do
     GenServer.call(pid, {:send_request_chunk, chunk, is_last_chunk})
   end
@@ -41,39 +42,54 @@ defmodule OpenAperture.Router.BackendRequestServer do
     {:ok, %{parent_pid: parent_pid}}
   end
 
+  # Returns
+  # {:ok, time}
+  # {:error, reason, time}
   def handle_call({:start_request, method, url, request_headers, has_request_body}, _from, state) do
     hackney_options = [:async, {:stream_to, self}]
     hackney_options = get_hackney_options(url) ++ hackney_options
 
     if has_request_body do
-      result = :hackney.request(method, url, request_headers, :stream, hackney_options)
+      {time, result} = :timer.tc(:hackney, :request, [method, url, request_headers, :stream, hackney_options])
     else
-      result = :hackney.request(method, url, request_headers, "", hackney_options)
+      {time, result} = :timer.tc(:hackney, :request, [method, url, request_headers, "", hackney_options])
     end
+
+    state = Map.put(state, :request_start, :os.timestamp)
 
     case result do
       {:ok, client} ->
         Logger.debug "Client #{inspect client} successfully initiated request."
-        {:reply, :ok, Map.put(state, :hackney_client, client)}
-      {:error, reason} -> {:stop, :normal, {:error, reason}, state}
+        {:reply, {:ok, time}, Map.put(state, :hackney_client, client)}
+      {:error, reason} ->
+        {:stop, :normal, {:error, reason, time}, state}
     end
   end
 
+  # Returns
+  # {:ok, time}
+  # {:error, reason, time}
   def handle_call({:send_request_chunk, chunk, false}, _from, %{hackney_client: client} = state) do
-    case :hackney.send_body(client, chunk) do
-      :ok -> {:reply, :ok, state}
-      {:error, reason} -> {:reply, {:error, reason}, state}
+    {time, result} = :timer.tc(:hackney, :send_body, [client, chunk])
+    case result do
+      :ok -> {:reply, {:ok, time}, state}
+      {:error, reason} -> {:reply, {:error, reason, time}, state}
     end
   end
 
+  # Returns
+  # {:ok, time}
+  # {:error, reason, time}
   def handle_call({:send_request_chunk, chunk, true}, _from, %{hackney_client: client} = state) do
-    case :hackney.send_body(client, chunk) do
+    {time, result} = :timer.tc(:hackney, :send_body, [client, chunk])
+    case result do
       :ok ->
-        case :hackney.start_response(client) do
-          {:ok, client} -> {:reply, :ok, %{state | hackney_client: client}}
-          {:error, reason} -> {:reply, {:error, reason}, state}
+        {response_time, result} = :timer.tc(:hackney, :start_response, [client])
+        case result do
+          {:ok, client} -> {:reply, {:ok, time + response_time}, %{state | hackney_client: client}}
+          {:error, reason} -> {:reply, {:error, reason, time + response_time}, state}
         end
-      {:error, reason} -> {:reply, {:error, reason}, state}
+      {:error, reason} -> {:reply, {:error, reason, time}, state}
     end
   end
 
@@ -94,8 +110,10 @@ defmodule OpenAperture.Router.BackendRequestServer do
   end
 
   def handle_info({:hackney_response, client_ref, :done}, %{parent_pid: parent} = state) do
+    now = :os.timestamp
     Logger.debug("Client #{inspect client_ref} received hackney message indicating the request has completed. Shutting down BackendRequestServer GenServer...")
-    send(parent, {:backend_request_done, self})
+    duration = :timer.now_diff(now, state[:request_start])
+    send(parent, {:backend_request_done, self, duration})
     {:stop, :normal, state}
   end
 

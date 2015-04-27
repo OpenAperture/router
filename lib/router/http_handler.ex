@@ -46,27 +46,27 @@ defmodule OpenAperture.Router.HttpHandler do
   def init({transport, _proto_name}, req, _opts) do
     start_time = :os.timestamp()
 
-    {:ok, req, {transport, start_time}}
+    {:ok, req, {transport, {start_time, 0}}}
   end
 
   # handle is where we actually figure out how we're going to route the request
-  def handle(req, {transport, start_time}) do
+  def handle(req, {transport, {start_time, _end_time}}) do
     {path, req} = :cowboy_req.path(req)
 
     if path == "/openaperture_router_status_check" do
       # This request is meant for the router itself, so no need to route it
       # anywhere else.
       req = handle_status_request(req)
-      {:ok, req, {start_time, 0}}
+      {:ok, req, {transport, {start_time, 0}}}
     else
       {result, req, duration} = handle_request(req, path, transport)
-      {result, req, {start_time, duration}}
+      {result, req, {transport, {start_time, duration}}}
     end
   end
 
   # terminate is called by cowboy to allow us to clean up after the request has
   # completed.
-  def terminate(_reason, _req, {start_time, req_time}) do
+  def terminate(_reason, _req, {_transport, {start_time, req_time}}) do
     total_time = :timer.now_diff(:os.timestamp(), start_time)
 
     total_time_ms = div(total_time, 1000)

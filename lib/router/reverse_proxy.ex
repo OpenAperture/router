@@ -68,22 +68,22 @@ defmodule OpenAperture.Router.ReverseProxy do
 
         result = BackendRequestServer.start_request(backend_request_server_pid, method, url, headers, has_body)
         case result do
-          {:error, reason} ->
+          {:error, reason, request_time} ->
             Logger.error "An error occurred initiating the request to #{url}: #{inspect reason}"
             # TODO: Maybe retry the request?
             {_reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [503, [], "", req])
-            {result, req, 0}
-          :ok ->
+            {result, req, request_time}
+          {:ok, request_time} ->
             if has_body do
               # We need to send the request body
               case send_body(req, backend_request_server_pid) do
-                {:ok, req, _time} ->
-                  message_loop(req, backend_request_server_pid, :waiting_for_response)
-                {:error, reason, req, time} ->
-                  {:error, reason, req, time}
+                {:ok, req, send_body_time} ->
+                  message_loop(req, backend_request_server_pid, :waiting_for_response, request_time + send_body_time)
+                {:error, reason, req, send_body_time} ->
+                  {:error, reason, req, request_time}
               end
             else
-              message_loop(req, backend_request_server_pid, :waiting_for_response)
+              message_loop(req, backend_request_server_pid, :waiting_for_response, request_time)
             end
         end
     end
@@ -99,20 +99,20 @@ defmodule OpenAperture.Router.ReverseProxy do
 
       {:more, chunk, req} ->
         case BackendRequestServer.send_request_chunk(backend_request_server_pid, chunk, false) do
-          :ok ->
-            send_body(req, backend_request_server_pid, time + req_time)
-          {:error, reason} ->
+          {:ok, send_chunk_time} ->
+            send_body(req, backend_request_server_pid, time + req_time + send_chunk_time)
+          {:error, reason, send_chunk_time} ->
             Logger.error "Error sending request body chunk to backend server: #{inspect reason}"
             # TODO: Retry?
-            {:error, reason, req, time + req_time}
+            {:error, reason, req, time + req_time + send_chunk_time}
         end
       {:ok, chunk, req} ->
         case BackendRequestServer.send_request_chunk(backend_request_server_pid, chunk, true) do
-          :ok ->
-            {:ok, req, time + req_time}
-          {:error, reason} ->
+          {:ok, send_chunk_time} ->
+            {:ok, req, time + req_time + send_chunk_time}
+          {:error, reason, send_chunk_time} ->
             Logger.error "Error sending *final* request body chunk to backend server: #{inspect reason}"
-            {:error, reason, req, time + req_time}
+            {:error, reason, req, time + req_time + send_chunk_time}
         end
     end
   end
@@ -120,8 +120,8 @@ defmodule OpenAperture.Router.ReverseProxy do
   # Message Loop stages:
   # :waiting_for_response
   # :receiving_response
-  @spec message_loop(cowboy_req, pid, atom, Map.t) :: {:ok, cowboy_req, integer} | {:error, cowboy_req, integer}
-  defp message_loop(req, backend_request_pid, stage, state \\ %{}) do
+  @spec message_loop(cowboy_req, pid, atom, integer, Map.t) :: {:ok, cowboy_req, integer} | {:error, cowboy_req, integer}
+  defp message_loop(req, backend_request_pid, stage, duration, state \\ %{}) do
     timeout = Keyword.get(@timeouts, stage, 5_000)
 
     receive do
@@ -129,14 +129,14 @@ defmodule OpenAperture.Router.ReverseProxy do
         # Todo: See if we can glean some information from the `reason` param
         # which might allow us to set a more helpful status code.
         # TODO: fix time
-        {:error, req, 0}
+        {:error, req, duration}
 
       {:backend_request_initial_response, ^backend_request_pid, status_code, status_reason, response_headers} ->
         if chunked_request?(response_headers) do
           status = get_response_status(status_code, status_reason)
-          {_reply_time, {:ok, req}} = :timer.tc(:cowboy_req, :chunked_reply, [status, response_headers, req])
+          {reply_time, {:ok, req}} = :timer.tc(:cowboy_req, :chunked_reply, [status, response_headers, req])
           state = Map.put(state, :response_type, :chunked)
-          message_loop(req, backend_request_pid, :receiving_response, state)
+          message_loop(req, backend_request_pid, :receiving_response, duration + reply_time, state)
         else
           # WORKAROUND:
           # Hackney will hang waiting for a response body even if the server
@@ -148,11 +148,10 @@ defmodule OpenAperture.Router.ReverseProxy do
             # We're done here. Reply to the client and kill the
             # backend request process.
             status = get_response_status(status_code, status_reason)
-            {_reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, response_headers, "", req])
+            {reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, response_headers, "", req])
             Process.unlink(backend_request_pid)
             Process.exit(backend_request_pid, :normal)
-            # TODO: Fix time
-            {result, req, 0}
+            {result, req, duration + reply_time}
           else
             # Otherwise, we need to buffer or stream the response body
             # TODO: Determine if we can buffer the response, or if we need to
@@ -163,45 +162,45 @@ defmodule OpenAperture.Router.ReverseProxy do
               status_reason: status_reason,
               response_headers: response_headers,
               chunks: []})
-            message_loop(req, backend_request_pid, :receiving_response, state)
+            message_loop(req, backend_request_pid, :receiving_response, duration, state)
           end
         end
 
       {:backend_request_response_chunk, ^backend_request_pid, chunk} ->
         case state[:response_type] do
           :chunked ->
-            {_result, _send_time} = send_response_body_chunk(req, chunk)
-            message_loop(req, backend_request_pid, :receiving_response, state)
+            {_result, send_time} = send_response_body_chunk(req, chunk)
+            message_loop(req, backend_request_pid, :receiving_response, duration + send_time, state)
           :buffered ->
             # TODO: Prepend the new chunk, and then do a single Enum.reverse on
             # the list of chunks before we send it back. Appending to the end
             # of a list is slow!
             chunks = state[:chunks] ++ [chunk]
             state = Map.put(state, :chunks, chunks)
-            message_loop(req, backend_request_pid, :receiving_response, state)
+            message_loop(req, backend_request_pid, :receiving_response, duration, state)
           # TODO: streaming
           # :streaming ->
             # stream the response body
 
         end
 
-      {:backend_request_done, ^backend_request_pid} ->
+      {:backend_request_done, ^backend_request_pid, backend_duration} ->
         case state[:response_type] do
           :chunked ->
             # Cowboy should close the connection for us, so all we should need
             # to do here is return, closing out the message loop.
             # TODO: Fix time
-            {:ok, req, 0}
+            {:ok, req, backend_duration}#duration + backend_duration}
           :buffered ->
             # We've buffed the whole response, so now we're ready to reply to
             # the client
             body = Enum.join(state[:chunks])
 
             status = get_response_status(state)
-            {_reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, state[:response_headers], body, req])
+            {reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, state[:response_headers], body, req])
 
             # TODO: Fix time
-            {result, req, 0}
+            {result, req, backend_duration}#duration + backend_duration + reply_time}
           # TODO: streaming
           # :streaming ->
         end

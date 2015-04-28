@@ -172,10 +172,7 @@ defmodule OpenAperture.Router.ReverseProxy do
             {_result, send_time} = send_response_body_chunk(req, chunk)
             message_loop(req, backend_request_pid, :receiving_response, duration + send_time, state)
           :buffered ->
-            # TODO: Prepend the new chunk, and then do a single Enum.reverse on
-            # the list of chunks before we send it back. Appending to the end
-            # of a list is slow!
-            chunks = state[:chunks] ++ [chunk]
+            chunks = [chunk] ++ state[:chunks]
             state = Map.put(state, :chunks, chunks)
             message_loop(req, backend_request_pid, :receiving_response, duration, state)
           # TODO: streaming
@@ -194,7 +191,9 @@ defmodule OpenAperture.Router.ReverseProxy do
           :buffered ->
             # We've buffed the whole response, so now we're ready to reply to
             # the client
-            body = Enum.join(state[:chunks])
+            body = state[:chunks]
+                   |> Enum.reverse
+                   |> Enum.join
 
             status = get_response_status(state)
             {reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, state[:response_headers], body, req])
@@ -279,7 +278,7 @@ defmodule OpenAperture.Router.ReverseProxy do
   @spec add_request_id_header(headers) :: headers
   defp add_request_id_header(headers) do
     request_id = UUID.uuid4(:hex)
-    headers ++ [{"X-OpenAperture-Request-ID", request_id}]
+    [{"X-OpenAperture-Request-ID", request_id}] ++ headers
   end
 
   @spec add_forwarded_for_header(headers, cowboy_req) :: {headers, cowboy_req}
@@ -296,21 +295,21 @@ defmodule OpenAperture.Router.ReverseProxy do
         "#{addr}:#{peer_port}"
     end
 
-    {headers ++ [{"X-Forwarded-For", address_header}], req}
+    {[{"X-Forwarded-For", address_header}] ++ headers, req}
   end
 
   @spec add_forwarded_host_header(headers, String.t) :: headers
   defp add_forwarded_host_header(headers, host) do
-    headers ++ [{"X-Forwarded-Host", host}]
+    [{"X-Forwarded-Host", host}] ++ headers
   end
 
   @spec add_forwarded_port_header(headers, integer) :: headers
   defp add_forwarded_port_header(headers, port) do
-    headers ++ [{"X-Forwarded-Port", Integer.to_string(port)}]
+    [{"X-Forwarded-Port", Integer.to_string(port)}] ++ headers
   end
 
   @spec add_forwarded_proto_header(headers, atom) :: headers
   defp add_forwarded_proto_header(headers, proto) do
-    headers ++ [{"X-Forwarded-Proto", Atom.to_string(proto)}]
+    [{"X-Forwarded-Proto", Atom.to_string(proto)}] ++ headers
   end
 end

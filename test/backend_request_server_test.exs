@@ -28,12 +28,6 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
       assert reason == :nxdomain
     end
 
-    test "blar", context do
-      result = BackendRequestServer.start_request(context[:server_pid], :get, get_httparrot_http_base_url, [], false)
-      IO.puts "result: #{inspect result}"
-      #assert result == {:ok, _time}
-    end
-
     should "receive a set of messages after making a request", context do
       pid = context[:server_pid]
       {result, _time} = BackendRequestServer.start_request(pid, :get, get_httparrot_http_base_url, [], false)

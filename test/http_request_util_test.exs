@@ -1,5 +1,5 @@
 defmodule OpenAperture.Router.HttpRequestUtil.Test do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   alias OpenAperture.Router.HttpRequestUtil
 
   setup do

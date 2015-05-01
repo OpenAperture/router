@@ -1,6 +1,6 @@
 OpenAperture Router
 ================
-[![Build Status](https://semaphoreci.com/api/v1/projects/bf27c47e-9911-47a3-ae93-2cfd9d645c88/406002/badge.svg)](https://semaphoreci.com/perceptive/router) [![Coverage Status](https://coveralls.io/repos/OpenAperture/router/badge.svg?branch=master)](https://coveralls.io/r/OpenAperture/router?branch=master)
+[![Build Status](https://semaphoreci.com/api/v1/projects/e71069e8-aff3-484f-abbe-dcda3cb2b5de/413711/badge.svg)](https://semaphoreci.com/perceptive/router) [![Coverage Status](https://coveralls.io/repos/OpenAperture/router/badge.svg?branch=master)](https://coveralls.io/r/OpenAperture/router?branch=master)
 
 This is a fast HTTP reverse proxy using Cowboy to handle incoming HTTP connections, and ETS for route lookup.
 

@@ -6,6 +6,7 @@ defmodule OpenAperture.Router.RouteServer do
   """
 
   @type unix_timestamp :: integer
+  @default_ttl 60_000
 
   require Logger
   import OpenAperture.Router.Util
@@ -67,8 +68,7 @@ defmodule OpenAperture.Router.RouteServer do
   # with the new routes.
   defp update_routes() do
     receive do
-      # TODO: Make this value configurable...
-    after routes_ttl() ->
+    after Application.get_env(:openaperture_router, :route_server_ttl, @default_ttl) ->
       case get_last_fetch_timestamp() do
         nil ->
           # The initial load of routes failed for some reason. Try it now.
@@ -76,23 +76,11 @@ defmodule OpenAperture.Router.RouteServer do
           load_all_routes()
 
         timestamp ->
-          case get_routes(timestamp) do
-            {:ok, routes, new_timestamp} ->
-              if length(routes) == 0 do
-                Logger.debug "No updated routes since #{inspect timestamp}"
-              else
-                Logger.debug "Updated (or new) routes: #{length(routes)}"
-                Enum.each(routes, fn ({authority, tuples}) ->
-                  ConCache.put(:routes, authority, tuples)
-                end)
-              end
-
-              Agent.update(__MODULE__, fn _state -> new_timestamp end)
-
-              Logger.debug "Finished updating routes at #{inspect new_timestamp}"
-
+          case handle_deleted_routes(timestamp) do
+            :ok ->
+              handle_updated_routes(timestamp)
             {:error, error} ->
-              Logger.error "Error updating routes: #{inspect error}"
+              Logger.error "Error handling deleted routes: #{inspect error}"
           end
       end
     end
@@ -101,14 +89,40 @@ defmodule OpenAperture.Router.RouteServer do
     update_routes()
   end
 
+  @spec handle_deleted_routes(integer) :: :ok | {:error, any}
+  defp handle_deleted_routes(timestamp) do
+    case get_deleted_authorities(timestamp) do
+      {:ok, specs} -> nil
+        Logger.debug "Deleted routes: #{length(specs)}"
+        Enum.each(specs, &(ConCache.delete(:routes, &1)))
+      error -> error
+    end
+  end
+
+  defp handle_updated_routes(timestamp) do
+    case get_routes(timestamp) do
+      {:ok, routes, new_timestamp} ->
+        if length(routes) == 0 do
+          Logger.debug "No updated routes since #{inspect timestamp}"
+        else
+          Logger.debug "Updated (or new) routes: #{length(routes)}"
+          Enum.each(routes, fn ({authority, tuples}) ->
+            ConCache.put(:routes, authority, tuples)
+          end)
+        end
+
+        Agent.update(__MODULE__, fn _state -> new_timestamp end)
+
+        Logger.debug "Finished updating routes at #{inspect new_timestamp}"
+
+      {:error, error} ->
+        Logger.error "Error updating routes: #{inspect error}"
+    end
+  end
+
   @spec routes_url() :: String.t | nil
   defp routes_url() do
     Application.get_env(:openaperture_router, :route_server_url)
-  end
-
-  @spec routes_ttl() :: integer | nil
-  defp routes_ttl() do
-    Application.get_env(:openaperture_router, :route_server_ttl)
   end
 
   @spec get_routes() :: {:ok, [{String.t, tuple}], integer} | {:error, any}
@@ -119,6 +133,35 @@ defmodule OpenAperture.Router.RouteServer do
   @spec get_routes(integer) :: {:ok, [{String.t, tuple}], integer} | {:error, any}
   defp get_routes(timestamp) do
     load_routes("#{routes_url}?updated_since=#{timestamp}")
+  end
+
+  @spec get_deleted_authorities(integer) :: {:ok, [String.t]} | {:error, any}
+  defp get_deleted_authorities(timestamp) do
+    # Remove the trailing slash from the base URL, if it's present
+    url = String.rstrip(routes_url, ?/)
+
+    url = url <> "/deleted?updated_since=#{timestamp}"
+
+    Logger.info "Checking for any new deleted authorities at #{url}"
+    case :hackney.get(url, [get_auth_header], "", get_hackney_options(url)) do
+      {:ok, 200, _headers, client} ->
+        case :hackney.body(client) do
+          {:ok, body} ->
+            case Poison.decode(body) do
+              {:ok, specs} ->
+                {:ok, specs}
+              {:error, err} ->
+                Logger.error "Could not decode JSON response from #{url}: #{inspect err}"
+                {:error, err}
+            end
+          other ->
+            Logger.error "Error retrieving deleted authorities message body: #{inspect other}"
+            {:error, other}
+        end
+      other ->
+        Logger.error "Error making call to #{url}: #{inspect other}"
+        {:error, other}
+    end
   end
 
   @spec load_routes(String.t) :: {:ok, [{String.t, tuple}], integer} | {:error, any}

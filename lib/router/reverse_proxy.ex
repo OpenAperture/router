@@ -144,7 +144,7 @@ defmodule OpenAperture.Router.ReverseProxy do
           # response body (i.e. 204, 304). If we get one of these response
           # statuses, and there's no content-length or transfer-encoding
           # header, just reply to the client and kill the backend process.
-          if status_code in [204, 304] && get_content_length_or_transfer_encoding(response_headers) do
+          if status_code in [204, 304] && !get_content_length_or_transfer_encoding(response_headers) do
             # We're done here. Reply to the client and kill the
             # backend request process.
             status = get_response_status(status_code, status_reason)

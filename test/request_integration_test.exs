@@ -284,4 +284,24 @@ defmodule OpenAperture.Router.RequestIntegrationTest do
 
     assert headers["x-forwarded-proto"] == header_value
   end
+
+  test "strips out cowboy response headers" do
+    server = "test_server"
+    connection = "close"
+    date = "Wed, 06 May 2015 19:11:15 GMT"
+    transfer_encoding = "weird"
+
+    query = "Server=" <> URI.encode(server) <> "&Connection=" <> URI.encode(connection) <> "&Date=" <> URI.encode(date) <> "&Transfer-Encoding=" <> URI.encode(transfer_encoding)
+    {:ok, response} = request(:get, "http://localhost:8080/response-headers?" <> query)
+    assert response.status_code == 200
+
+    headers = response[:headers]
+
+    assert {"server", "Cowboy"} in headers == false
+
+    assert List.keyfind(headers, "Server", 0) == {"Server", server}
+    assert List.keyfind(headers, "Connection", 0) == {"Connection", connection}
+    assert List.keyfind(headers, "Date", 0) == {"Date", date}
+    assert List.keyfind(headers, "Transfer-Encoding", 0) == {"Transfer-Encoding", transfer_encoding}
+  end
 end

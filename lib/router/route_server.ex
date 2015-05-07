@@ -5,7 +5,6 @@ defmodule OpenAperture.Router.RouteServer do
   a timestamp indicating the last time the route list was updated.
   """
 
-  @type unix_timestamp :: integer
   @default_ttl 60_000
 
   require Logger
@@ -34,7 +33,7 @@ defmodule OpenAperture.Router.RouteServer do
     {:ok, updater_pid}
   end
 
-  @spec get_last_fetch_timestamp :: unix_timestamp
+  @spec get_last_fetch_timestamp :: Types.unix_timestamp
   def get_last_fetch_timestamp() do
     Agent.get(__MODULE__, &(&1))
   end
@@ -89,7 +88,7 @@ defmodule OpenAperture.Router.RouteServer do
     update_routes()
   end
 
-  @spec handle_deleted_routes(integer) :: :ok | {:error, any}
+  @spec handle_deleted_routes(Types.unix_timestamp) :: :ok | {:error, any}
   defp handle_deleted_routes(timestamp) do
     case get_deleted_authorities(timestamp) do
       {:ok, specs} -> nil
@@ -125,17 +124,17 @@ defmodule OpenAperture.Router.RouteServer do
     Application.get_env(:openaperture_router, :route_server_url)
   end
 
-  @spec get_routes() :: {:ok, [{String.t, tuple}], integer} | {:error, any}
+  @spec get_routes() :: {:ok, [{String.t, tuple}], Types.unix_timestamp} | {:error, any}
   defp get_routes() do
     load_routes(routes_url)
   end
 
-  @spec get_routes(integer) :: {:ok, [{String.t, tuple}], integer} | {:error, any}
+  @spec get_routes(Types.unix_timestamp) :: {:ok, [{String.t, tuple}], Types.unix_timestamp} | {:error, any}
   defp get_routes(timestamp) do
     load_routes("#{routes_url}?updated_since=#{timestamp}")
   end
 
-  @spec get_deleted_authorities(integer) :: {:ok, [String.t]} | {:error, any}
+  @spec get_deleted_authorities(Types.unix_timestamp) :: {:ok, [String.t]} | {:error, any}
   defp get_deleted_authorities(timestamp) do
     # Remove the trailing slash from the base URL, if it's present
     url = String.rstrip(routes_url, ?/)
@@ -164,7 +163,7 @@ defmodule OpenAperture.Router.RouteServer do
     end
   end
 
-  @spec load_routes(String.t) :: {:ok, [{String.t, tuple}], integer} | {:error, any}
+  @spec load_routes(String.t) :: {:ok, [{String.t, tuple}], Types.unix_timestamp} | {:error, any}
   defp load_routes(routes_url) do
     Logger.info "Loading routes from #{routes_url}"
     case :hackney.get(routes_url, [get_auth_header], "", get_hackney_options(routes_url)) do

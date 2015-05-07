@@ -4,8 +4,7 @@ defmodule OpenAperture.Router.Util do
   throughout the router
   """
 
-  @type erlang_timestamp :: {MegaSecs, Secs, MicroSecs}
-  @type unix_timestamp :: integer
+  alias OpenAperture.Router.Types
 
   @doc """
   Converts an erlang timestamp to a unix timestamp. Erlang timestamps are of
@@ -17,7 +16,7 @@ defmodule OpenAperture.Router.Util do
   This conversion is necessarily lossy, since Unix timestamps have only one
   second resolution, while Erlang timestamps have microsecond resolution.
   """
-  @spec erlang_timestamp_to_unix_timestamp(erlang_timestamp) :: unix_timestamp
+  @spec erlang_timestamp_to_unix_timestamp(Types.erlang_timestamp) :: Types.unix_timestamp
   def erlang_timestamp_to_unix_timestamp(erlang_timestamp) do
     # Unix time only counts seconds, disregard microseconds
     {mega, secs, _} = erlang_timestamp
@@ -31,11 +30,11 @@ defmodule OpenAperture.Router.Util do
 
   ## Example
 
-      iex> OpenAperture.Router.Util.erlang_timestamp_to_integer({1423, 865182, 571806})
+      iex> OpenAperture.Router.Util.erlang_timestamp_to_microseconds({1423, 865182, 571806})
       1423865182571806
   """
-  @spec erlang_timestamp_to_integer(erlang_timestamp) :: integer
-  def erlang_timestamp_to_integer({megaSecs, secs, microSecs}) do
+  @spec erlang_timestamp_to_microseconds(Types.erlang_timestamp) :: integer
+  def erlang_timestamp_to_microseconds({megaSecs, secs, microSecs}) do
     megaSecs * 1_000_000 * 1_000_000 + secs * 1_000_000 + microSecs
   end
 
@@ -45,11 +44,11 @@ defmodule OpenAperture.Router.Util do
 
   ## Example
 
-      iex> OpenAperture.Router.Util.integer_to_erlang_timestamp(1423865182571806)
+      iex> OpenAperture.Router.Util.microseconds_to_erlang_timestamp(1423865182571806)
       {1423,865182,571806}
   """
-  @spec integer_to_erlang_timestamp(integer) :: erlang_timestamp
-  def integer_to_erlang_timestamp(integer) do
+  @spec microseconds_to_erlang_timestamp(integer) :: Types.erlang_timestamp
+  def microseconds_to_erlang_timestamp(integer) do
     megas = div(integer, 1_000_000 * 1_000_000)
     secs = integer
            |> div(1_000_000)

@@ -82,7 +82,7 @@ defmodule OpenAperture.Router.Util.Test do
     Application.delete_env(:openaperture_router, :hackney_config)
   end
 
-  test "erlang_timestamp_to_integer" do
+  test "erlang_timestamp_to_microseconds" do
     now = :erlang.now()
     {megas, secs, micros} = now
 
@@ -98,10 +98,10 @@ defmodule OpenAperture.Router.Util.Test do
 
     int = String.to_integer("#{megas}#{secs}#{micros}")
 
-    assert erlang_timestamp_to_integer(now) == int
+    assert erlang_timestamp_to_microseconds(now) == int
   end
 
-  test "integer_to_erlang_timestamp" do
+  test "microseconds_to_erlang_timestamp" do
     now = :erlang.now
     {megas, secs, micros} = now
 
@@ -117,6 +117,6 @@ defmodule OpenAperture.Router.Util.Test do
 
     int = String.to_integer("#{megas}#{secs}#{micros}")
 
-    assert integer_to_erlang_timestamp(int) == now
+    assert microseconds_to_erlang_timestamp(int) == now
   end
 end

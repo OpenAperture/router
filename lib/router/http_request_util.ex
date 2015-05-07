@@ -4,8 +4,8 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   data from a cowboy request tuple and formatting in a way the router can use.
   """
 
-  @type cowboy_req :: tuple
-  @type headers :: [{String.t, String.t}]
+  alias OpenAperture.Router.Types
+
   @doc """
   The :cowboy_req module's "method" function returns the HTTP verb used on an
   incoming request as a string. We need it in the form of an atom, so this
@@ -13,7 +13,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   HTTP verbs are returned as strings, since we cannot (safely) automatically
   convert them to atoms.
   """
-  @spec get_request_method(cowboy_req) :: {atom, CowboyReq} | {String.t, CowboyReq}
+  @spec get_request_method(Types.cowboy_req) :: {atom, Types.cowboyReq} | {String.t, Types.cowboyReq}
   def get_request_method(req) do
     {method, req} = :cowboy_req.method(req)
 
@@ -45,7 +45,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   them with the backend's host and port, as well as specifying if the backend
   request needs to be made via https or http.
   """
-  @spec get_backend_url(cowboy_req, String.t, integer, boolean) :: {atom, CowboyReq}
+  @spec get_backend_url(Types.cowboy_req, String.t, integer, boolean) :: {String.t, Types.cowboyReq}
   def get_backend_url(req, backend_host, backend_port, https? \\ false) do
     {host_url, req} = :cowboy_req.host_url(req)
     {url, req} = :cowboy_req.url(req)
@@ -62,7 +62,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
 
   # Checks if the header map contains a key named "Transfer-Encoding",
   # and if so, if its value matches "chunked".
-  @spec chunked_request?(headers) :: boolean
+  @spec chunked_request?(Types.headers) :: boolean
   def chunked_request?(headers) do
     headers
       |> Enum.any?(fn {key, value} ->
@@ -82,7 +82,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
 
   # Finds the first "content-length" or "transfer-encoding" header and returns
   # it. Returns nil if neither were found.
-  @spec get_content_length_or_transfer_encoding(headers) :: {String.t, String.t} | nil
+  @spec get_content_length_or_transfer_encoding(Types.headers) :: {String.t, String.t} | nil
   def get_content_length_or_transfer_encoding(headers) do
     headers
     |> Enum.find(fn {key, _val} ->

@@ -9,16 +9,17 @@ defmodule OpenAperture.Router.BackendRequestServer do
 
   import OpenAperture.Router.Util
 
-  @type headers :: [{String.t, String.t}]
-  @type time :: integer
+  alias OpenAperture.Router.Types
 
   ## Client API
   @doc """
   Initiates the request to the backend. Requires the request method, the
   backend url, the set of request headers, and a boolean flag indicating that
   it should prepare to stream a request body.
+
+  Returns {:ok, duration} on success, or {:error, reason, duration} on failure.
   """
-  @spec start_request(pid, atom, String.t, headers, boolean) :: {:ok, time} | {:error, any, time}
+  @spec start_request(pid, atom, String.t, Types.headers, boolean) :: {:ok, Types.microseconds} | {:error, any, Types.microseconds}
   def start_request(pid, method, url, request_headers, has_request_body) do
     GenServer.call(pid, {:start_request, method, url, request_headers, has_request_body})
   end
@@ -26,8 +27,10 @@ defmodule OpenAperture.Router.BackendRequestServer do
   @doc """
   Send a chunk of the request body to the backend server. The `is_last_chunk`
   flag is used to indicate that there are no more body chunks to be sent.
+
+  Returns {:ok, duration} on success, or {:error, reason, duration} on failure.
   """
-  @spec send_request_chunk(pid, String.t, boolean) :: {:ok, time} | {:error, any, time}
+  @spec send_request_chunk(pid, String.t, boolean) :: {:ok, Types.microseconds} | {:error, any, Types.microseconds}
   def send_request_chunk(pid, chunk, is_last_chunk) do
     GenServer.call(pid, {:send_request_chunk, chunk, is_last_chunk})
   end
@@ -43,8 +46,8 @@ defmodule OpenAperture.Router.BackendRequestServer do
   end
 
   # Returns
-  # {:ok, time}
-  # {:error, reason, time}
+  # {:ok, duration}
+  # {:error, reason, duration}
   def handle_call({:start_request, method, url, request_headers, has_request_body}, _from, state) do
     hackney_options = [:async, {:stream_to, self}]
     hackney_options = get_hackney_options(url) ++ hackney_options
@@ -67,8 +70,8 @@ defmodule OpenAperture.Router.BackendRequestServer do
   end
 
   # Returns
-  # {:ok, time}
-  # {:error, reason, time}
+  # {:ok, duration}
+  # {:error, reason, duration}
   def handle_call({:send_request_chunk, chunk, false}, _from, %{hackney_client: client} = state) do
     {time, result} = :timer.tc(:hackney, :send_body, [client, chunk])
     case result do
@@ -78,8 +81,8 @@ defmodule OpenAperture.Router.BackendRequestServer do
   end
 
   # Returns
-  # {:ok, time}
-  # {:error, reason, time}
+  # {:ok, duration}
+  # {:error, reason, duration}
   def handle_call({:send_request_chunk, chunk, true}, _from, %{hackney_client: client} = state) do
     {time, result} = :timer.tc(:hackney, :send_body, [client, chunk])
     case result do

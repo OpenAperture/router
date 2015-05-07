@@ -7,7 +7,7 @@
   "exjsx": {:hex, :exjsx, "3.1.0"},
   "exrm": {:hex, :exrm, "0.14.17"},
   "hackney": {:hex, :hackney, "1.0.6"},
-  "httparrot": {:hex, :httparrot, "0.3.4"},
+  "httparrot": {:git, "git://github.com/edgurgel/httparrot.git", "4ada4b58bc732c71d54f39b852268a7a81d90391", []},
   "idna": {:hex, :idna, "1.0.2"},
   "jsx": {:hex, :jsx, "2.4.0"},
   "meck": {:hex, :meck, "0.8.2"},

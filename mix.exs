@@ -34,7 +34,7 @@ defmodule OpenAperture.Router.Mixfile do
       {:exrm, "0.14.17"},
       {:uuid, "0.1.5"},
       {:poison, "1.3.1"},
-      {:httparrot, "~>0.3.4", only: :test},
+      {:httparrot, github: "edgurgel/httparrot"},
       {:meck, "0.8.2", only: :test},
       {:openaperture_auth, github: "OpenAperture/auth"},
       {:shouldi, "0.2.1", only: :test},

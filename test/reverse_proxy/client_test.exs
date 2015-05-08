@@ -123,7 +123,7 @@ defmodule OpenAperture.Router.ReverseProxy.Client.Test do
     assert time >= 0
   end
 
-  test "send_reply -- success" do
+  test "send_reply/4 -- success" do
     status = "200 OK"
     headers = [{"Content-Type", "text/plain"}, {"Content-Length", "11"}]
     body = "HELLO WORLD"
@@ -131,6 +131,18 @@ defmodule OpenAperture.Router.ReverseProxy.Client.Test do
     :meck.expect(:cowboy_req, :reply, [{[status, headers, body, :req], {:ok, :req1}}])
 
     {req, time} = send_reply(:req, status, headers, body)
+
+    assert req == :req1
+    assert time >= 0
+  end
+
+  test "send_reply/3 -- success" do
+    status = "200 OK"
+    headers = [{"Content-Type", "text/plain"}, {"Content-Length", "11"}]
+
+    :meck.expect(:cowboy_req, :reply, [{[status, headers, :req], {:ok, :req1}}])
+
+    {req, time} = send_reply(:req, status, headers)
 
     assert req == :req1
     assert time >= 0
@@ -202,4 +214,5 @@ defmodule OpenAperture.Router.ReverseProxy.Client.Test do
     assert {"X-Forwarded-Proto", "https"} in headers
     assert req == :req1
   end
+
 end

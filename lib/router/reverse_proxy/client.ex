@@ -7,6 +7,14 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
   
   alias OpenAperture.Router.BackendRequestServer
   alias OpenAperture.Router.Types
+
+  # Read the timeouts info from the env config
+  @timeouts Application.get_env(:openaperture_router, :timeouts, [
+    connecting: 5_000,
+    sending_request_body: 60_000,
+    waiting_for_response: 60_000,
+    receiving_response: 60_000
+    ])
   
   @doc """
   Sends the request body from the client to the backend server.
@@ -66,11 +74,21 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
   end
 
   @doc """
+  Sends a response without a response body. This is usually used when the
+  response body should be streamed.
+  """
+  @spec send_reply(Types.cowboy_req, String.t, Types.headers) :: {Types.cowboy_req, Types.microseconds}
+  def send_reply(req, status, headers) do
+    {reply_time, {:ok, req}} = :timer.tc(:cowboy_req, :reply, [status, headers, req])
+    {req, reply_time}
+  end
+
+  @doc """
   Initiates a chunked reply. This will send the status line and response
   headers to the client, but the does not indicate the request is "completed",
   as the response body chunks will be sent afterwards.
   """
-  @spec start_chunked_reply(Types.cowboy_req, String.t, Types.headers) :: {atom, Types.cowboy_req, Types.microseconds}
+  @spec start_chunked_reply(Types.cowboy_req, String.t, Types.headers) :: {Types.cowboy_req, Types.microseconds}
   def start_chunked_reply(req, status_line, headers) do
     {reply_time, {:ok, req}} = :timer.tc(:cowboy_req, :chunked_reply, [status_line, headers, req])
 

@@ -5,6 +5,8 @@ defmodule OpenAperture.Router.ReverseProxy do
   import OpenAperture.Router.ReverseProxy.Backend
   import OpenAperture.Router.ReverseProxy.Client
 
+  alias OpenAperture.Router.ReverseProxy.BufferedResponseBodyHandler
+  alias OpenAperture.Router.ReverseProxy.ChunkedResponseBodyHandler
   alias OpenAperture.Router.RouteCache
   alias OpenAperture.Router.Types
 
@@ -25,7 +27,7 @@ defmodule OpenAperture.Router.ReverseProxy do
   object, and an integer indicating the duration of the backend request
   (in microseconds).
   """
-  @spec proxy_request(Types.cowboy_req, String.t, atom) :: {atom, Types.cowboy_req, integer}
+  @spec proxy_request(Types.cowboy_req, String.t, atom) :: {:ok | :error, Types.cowboy_req, integer}
   def proxy_request(req, path, protocol) do
     # Issue the request to the backend server in a different process, as
     # cowboy sends messages to the current process, which we don't want to
@@ -80,30 +82,62 @@ defmodule OpenAperture.Router.ReverseProxy do
           # We need to send the request body
           case send_request_body(req, backend_request_server_pid) do
             {:ok, req, _send_body_time} ->
-              message_loop(req, backend_request_server_pid, :waiting_for_response)
+              handle_response(req, backend_request_server_pid)
             {:error, reason, req, send_body_time} ->
               {:error, reason, req, request_time + send_body_time}
           end
         else
-          message_loop(req, backend_request_server_pid, :waiting_for_response)
+          handle_response(req, backend_request_server_pid)
         end
     end
   end
 
-  # Message Loop stages:
-  # :waiting_for_response
-  # :receiving_response
-  @spec message_loop(Types.cowboy_req, pid, atom,  Map.t) :: {:ok, Types.cowboy_req, integer} | {:error, Types.cowboy_req, integer}
-  defp message_loop(req, backend_request_pid, stage, state \\ %{}) do
-    timeout = Keyword.get(@timeouts, stage, 5_000)
+  @spec handle_response(Types.cowboy_req, pid) :: {:ok, Types.cowboy_req, integer} | {:error, Types.cowboy_req, integer}
+  defp handle_response(req, backend_request_server_pid) do
+    case wait_for_response(req, backend_request_server_pid) do
+      :timeout ->
+        {:error, req, 0}
+      {:replied, req, duration} ->
+        {:ok, req, duration}
+      {:initial_response, status_code, status_reason, response_headers, backend_duration} ->
+        status_line = get_response_status(status_code, status_reason)
 
+        if chunked_request?(response_headers) do
+          req = :cowboy_req.set_meta(:response_type, :chunked, req)
+          {req, _reply_time} = start_chunked_reply(req, status_line, response_headers)
+          ChunkedResponseBodyHandler.handle(req, backend_request_server_pid)
+        else
+          response_headers
+          |> get_content_length_header
+          |> parse_content_length_header
+          |> case do
+            len when is_integer(len) and len < 102_400 ->
+              req = :cowboy_req.set_meta(:response_type, :buffered, req)
+              BufferedResponseBodyHandler.handle(req, backend_request_server_pid, status_line, response_headers)
+            _ ->
+              # Handling the streaming response is done in two parts. Here, we
+              # initiate the reply, with our custom request object metadata of
+              # `:response_type` set to `:streaming`. In 
+              # `HttpHandler.onresponse/4`, we'll check that metadata, see that
+              # it's set to `:streaming`, and call the streaming response body
+              # handler.
+              req = :cowboy_req.set_meta(:response_type, :streaming, req)
+              {req, reply_time} = send_reply(req, status_line, response_headers)
+              {:ok, req, reply_time + backend_duration}
+          end
+        end
+    end
+  end
+
+  defp wait_for_response(req, backend_request_server_pid) do
+    timeout = Keyword.get(@timeouts, :waiting_for_response, 5_000)
     receive do
-      {:backend_request_error, ^backend_request_pid, _reason, backend_duration} ->
+      {:backend_request_error, ^backend_request_server_pid, _reason, backend_duration} ->
         # Todo: See if we can glean some information from the `reason` param
         # which might allow us to set a more helpful status code.
         {:error, req, backend_duration}
 
-      {:backend_request_initial_response, ^backend_request_pid, status_code, status_reason, response_headers, backend_duration} ->
+      {:backend_request_initial_response, ^backend_request_server_pid, status_code, status_reason, response_headers, backend_duration} ->
         status_line = get_response_status(status_code, status_reason)
 
         # WORKAROUND:
@@ -116,65 +150,16 @@ defmodule OpenAperture.Router.ReverseProxy do
           # We're done here. Reply to the client and kill the
           # backend request process.
           {req, reply_time} = send_reply(req, status_line, response_headers, "")
-          Process.unlink(backend_request_pid)
-          Process.exit(backend_request_pid, :normal)
-          {:ok, req, backend_duration + reply_time}
+          Process.unlink(backend_request_server_pid)
+          Process.exit(backend_request_server_pid, :normal)
+          {:replied, req, backend_duration + reply_time}
         else
-          state = Map.merge(state, %{
-          status_code: status_code,
-          status_reason: status_reason,
-          status_line: status_line,
-          response_headers: response_headers
-          })
-
-          state = if chunked_request?(response_headers) do
-            {req, _reply_time} = start_chunked_reply(req, status_line, response_headers)
-            Map.merge(state, %{response_type: :chunked})
-          else
-            Map.merge(state, %{response_type: :buffered, chunks: []})
-          end
-
-          message_loop(req, backend_request_pid, :receiving_response, state)
+          {:initial_response, status_code, status_reason, response_headers, backend_duration}
         end
 
-      {:backend_request_response_chunk, ^backend_request_pid, chunk} ->
-        case state[:response_type] do
-          :chunked ->
-            {_result, _send_time} = send_response_body_chunk(req, chunk)
-            message_loop(req, backend_request_pid, :receiving_response, state)
-          :buffered ->
-            message_loop(req, backend_request_pid, :receiving_response, %{state | chunks: [chunk] ++ state[:chunks]})
-          # TODO: streaming
-          # :streaming ->
-            # stream the response body
-
-        end
-
-      {:backend_request_done, ^backend_request_pid, backend_duration} ->
-        case state[:response_type] do
-          :chunked ->
-            # Cowboy should close the connection for us, so all we should need
-            # to do here is return, closing out the message loop.
-            # TODO: Fix time
-            {:ok, req, backend_duration}#duration + backend_duration}
-          :buffered ->
-            # We've buffed the whole response, so now we're ready to reply to
-            # the client
-            body = state[:chunks]
-                   |> Enum.reverse
-                   |> Enum.join
-
-            {req, reply_time} = send_reply(req, state[:status_line], state[:response_headers], body)
-
-            {:ok, req, backend_duration + reply_time}
-
-          # TODO: streaming
-          # :streaming ->
-        end
-
-      after timeout ->
-        Logger.error "Reverse proxy timed out after #{inspect timeout}ms on stage: #{inspect stage}"
-        {:error, req, 0}
+    after timeout ->
+      Logger.error "Reverse proxy timed out after #{inspect timeout}ms while waiting for an initial response from the backend server."
+      :timeout
     end
   end
 

@@ -6,12 +6,15 @@ defmodule OpenAperture.Router.ReverseProxy.Test do
   alias OpenAperture.Router.HttpRequestUtil
   alias OpenAperture.Router.ReverseProxy
   alias OpenAperture.Router.ReverseProxy.Backend
+  alias OpenAperture.Router.ReverseProxy.BufferedResponseBodyHandler
   alias OpenAperture.Router.ReverseProxy.Client
   alias OpenAperture.Router.RouteCache
 
   setup do
     :meck.new :cowboy_req
     :meck.new Backend
+    :meck.new BufferedResponseBodyHandler, [:passthrough]
+    :meck.new Client, [:passthrough]
     :meck.new HttpRequestUtil, [:passthrough]
     :meck.new ReverseProxy, [:passthrough]
     :meck.new RouteCache
@@ -56,13 +59,14 @@ defmodule OpenAperture.Router.ReverseProxy.Test do
       {:ok, :pid, 1}
     end)
 
-    :meck.expect(Client, :send_reply, 4, {:req8, 100})
+    :meck.expect :cowboy_req, :set_meta, [{[:response_type, :buffered, :req7], :req8}]
+    :meck.expect(BufferedResponseBodyHandler, :handle, 4, {:ok, :req9, 200})
 
     send(self, {:backend_request_initial_response, :pid, 200, "OK", [{"content-type", "text/plain"}], 100})
     send(self, {:backend_request_done, :pid, 100})
 
     result = proxy_request(:req, "/", :https)
 
-    assert result == {:ok, :req8, 200}
+    assert result == {:ok, :req9, 200}
   end
 end

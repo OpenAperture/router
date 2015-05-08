@@ -3,7 +3,10 @@ defmodule OpenAperture.Router.HttpHandler do
 
   import OpenAperture.Router.HttpRequestUtil
   import OpenAperture.Router.Util
+
   alias OpenAperture.Router.ReverseProxy
+  alias OpenAperture.Router.ReverseProxy.StreamingResponseBodyHandler
+  alias OpenAperture.Router.Types
 
   # We set the on_response handler to allow us to strip out any response
   # headers cowboy may set automatically, since we want the router to be
@@ -20,16 +23,26 @@ defmodule OpenAperture.Router.HttpHandler do
               |> Enum.reverse
               |> Enum.uniq(fn {header, _value} -> String.downcase(header) end)
 
-    try do
-      {:ok, req} = if chunked_request?(headers) do
-        :cowboy_req.chunked_reply(status, headers, req)
-      else
-        # TODO: Figure out if we're sending back a buffered response or if we
-        # should be streaming the response... For now, we'll send it buffered.
-        :cowboy_req.reply(status, headers, body, req)
-      end
+    {response_type, req} = :cowboy_req.meta(:response_type, req)
 
-      req
+    try do
+      case response_type do
+        :chunked ->
+          {:ok, req} = :cowboy_req.chunked_reply(status, headers, req)
+          req
+        :buffered ->
+          {:ok, req} = :cowboy_req.reply(status, headers, body, req)
+          req
+        :streaming ->
+          req = :cowboy_req.set_resp_body_fun(&StreamingResponseBodyHandler.handle/2, req)
+          {:ok, req} = :cowboy_req.reply(status, headers, req)
+
+          req
+        _ ->
+          # If the request object doesn't have a response_type field set in
+          # it's metadata, let's not try to do anything special with it.
+          req
+      end
     catch
       _any ->
         # Per the cowboy documentation, this on_response handler *must not* be
@@ -116,6 +129,7 @@ defmodule OpenAperture.Router.HttpHandler do
   # Returns a tuple indicating success or failure, the newest copy of the
   # cowboy_req record, and an integer indicating how much time (in microsecs)
   # the backend server took to complete the request.
+  @spec handle_request(Types.cowboy_req, String.t, atom) :: {:ok | :error, Types.cowboy_req, Types.microsecs} | :ok
   defp handle_request(req, path, transport) do
     proto = case transport do
       :ssl -> :https

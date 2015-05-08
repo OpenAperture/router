@@ -124,4 +124,20 @@ defmodule OpenAperture.Router.HttpRequestUtil.Test do
   test "get_content_length_or_transfer_encoding -- preserves case" do
     assert HttpRequestUtil.get_content_length_or_transfer_encoding([{"Transfer-Encoding", "CHUNKED"}]) == {"Transfer-Encoding", "CHUNKED"}
   end
+
+  test "get_content_length_header -- returns content-length if present" do
+    assert HttpRequestUtil.get_content_length_header([{"content-length", "1234"}]) == {"content-length", "1234"}
+  end
+
+  test "get_content_length_header -- returns nil if headers list is empty" do
+    assert HttpRequestUtil.get_content_length_header([]) == nil
+  end
+
+  test "get_content_length_header -- returns nil if there is no content-length header" do
+    assert HttpRequestUtil.get_content_length_header([{"Transfer-Encoding", "chunked"}]) == nil
+  end
+
+  test "get_content_length_header -- preserves case" do
+    assert HttpRequestUtil.get_content_length_header([{"Content-Length", "1234"}]) == {"Content-Length", "1234"}
+  end
 end

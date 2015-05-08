@@ -80,8 +80,10 @@ defmodule OpenAperture.Router.HttpRequestUtil do
       end)
   end
 
-  # Finds the first "content-length" or "transfer-encoding" header and returns
-  # it. Returns nil if neither were found.
+  @doc """
+  Finds the first "content-length" or "transfer-encoding" header and returns
+  it. Returns nil if neither are found.
+  """
   @spec get_content_length_or_transfer_encoding(Types.headers) :: {String.t, String.t} | nil
   def get_content_length_or_transfer_encoding(headers) do
     headers
@@ -90,4 +92,30 @@ defmodule OpenAperture.Router.HttpRequestUtil do
       key == "content-length" || key == "transfer-encoding"
     end)
   end
+
+  @doc """
+  Finds the first "content-length" header and returns it, Returns nil if 
+  there isn't one.
+  """
+  @spec get_content_length_header(Types.headers) :: {String.t, String.t} | nil
+  def get_content_length_header(headers) do
+    headers
+    |> Enum.find(fn {key, _val} ->
+      key = String.downcase(key)
+      key == "content-length"
+    end)
+  end
+
+  @doc """
+  Retrieves the length, as an integer, of the content-length header.
+  """
+  @spec parse_content_length_header({String.t, String.t}) :: integer | nil
+  def parse_content_length_header({_, val}) when is_binary(val) do
+    case Integer.parse(val) do
+      {num, _} -> num
+      _ -> nil
+    end
+  end
+
+  def parse_content_length_header(_), do: nil
 end

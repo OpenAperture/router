@@ -58,11 +58,11 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
   when the response body is small. For large (but non-chunked) response bodies,
   use `start_streaming_reply/3`.
   """
-  @spec send_reply(Types.cowboy_req, String.t, Types.headers, String.t) :: {atom, Types.cowboy_req, Types.microseconds}
+  @spec send_reply(Types.cowboy_req, String.t, Types.headers, String.t) :: {Types.cowboy_req, Types.microseconds}
   def send_reply(req, status, headers, body) do
-    {reply_time, {result, req}} = :timer.tc(:cowboy_req, :reply, [status, headers, body, req])
+    {reply_time, {:ok, req}} = :timer.tc(:cowboy_req, :reply, [status, headers, body, req])
 
-    {result, req, reply_time}
+    {req, reply_time}
   end
 
   @doc """
@@ -72,9 +72,9 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
   """
   @spec start_chunked_reply(Types.cowboy_req, String.t, Types.headers) :: {atom, Types.cowboy_req, Types.microseconds}
   def start_chunked_reply(req, status_line, headers) do
-    {reply_time, {result, req}} = :timer.tc(:cowboy_req, :chunked_reply, [status_line, headers, req])
+    {reply_time, {:ok, req}} = :timer.tc(:cowboy_req, :chunked_reply, [status_line, headers, req])
 
-    {result, req, reply_time}
+    {req, reply_time}
   end
 
   @doc """

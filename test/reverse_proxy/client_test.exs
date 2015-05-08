@@ -123,29 +123,27 @@ defmodule OpenAperture.Router.ReverseProxy.Client.Test do
     assert time >= 0
   end
 
-  test "send_reply - returns :ok on success" do
+  test "send_reply -- success" do
     status = "200 OK"
     headers = [{"Content-Type", "text/plain"}, {"Content-Length", "11"}]
     body = "HELLO WORLD"
 
     :meck.expect(:cowboy_req, :reply, [{[status, headers, body, :req], {:ok, :req1}}])
 
-    {result, req, time} = send_reply(:req, status, headers, body)
+    {req, time} = send_reply(:req, status, headers, body)
 
-    assert result == :ok
     assert req == :req1
     assert time >= 0
   end
 
-  test "start_chunked_reply - returns :ok on success" do
+  test "start_chunked_reply -- success" do
     status = "200 OK"
     headers = [{"Content-Type", "text/plain"}, {"Transfer-Encoding", "chunked"}]
 
     :meck.expect(:cowboy_req, :chunked_reply, [{[status, headers, :req], {:ok, :req1}}])
 
-    {result, req, time} = start_chunked_reply(:req, status, headers)
+    {req, time} = start_chunked_reply(:req, status, headers)
 
-    assert result == :ok
     assert req == :req1
     assert time >= 0
   end

@@ -115,10 +115,10 @@ defmodule OpenAperture.Router.ReverseProxy do
         if status_code in [204, 304] && !get_content_length_or_transfer_encoding(response_headers) do
           # We're done here. Reply to the client and kill the
           # backend request process.
-          {result, req, reply_time} = send_reply(req, status_line, response_headers, "")
+          {req, reply_time} = send_reply(req, status_line, response_headers, "")
           Process.unlink(backend_request_pid)
           Process.exit(backend_request_pid, :normal)
-          {result, req, backend_duration + reply_time}
+          {:ok, req, backend_duration + reply_time}
         else
           state = Map.merge(state, %{
           status_code: status_code,
@@ -128,7 +128,7 @@ defmodule OpenAperture.Router.ReverseProxy do
           })
 
           state = if chunked_request?(response_headers) do
-            {result, req, reply_time} = start_chunked_reply(req, status_line, response_headers)
+            {req, _reply_time} = start_chunked_reply(req, status_line, response_headers)
             Map.merge(state, %{response_type: :chunked})
           else
             Map.merge(state, %{response_type: :buffered, chunks: []})
@@ -164,9 +164,9 @@ defmodule OpenAperture.Router.ReverseProxy do
                    |> Enum.reverse
                    |> Enum.join
 
-            {result, req, reply_time} = send_reply(req, state[:status_line], state[:response_headers], body)
+            {req, reply_time} = send_reply(req, state[:status_line], state[:response_headers], body)
 
-            {result, req, backend_duration + reply_time}
+            {:ok, req, backend_duration + reply_time}
 
           # TODO: streaming
           # :streaming ->

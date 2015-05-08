@@ -56,7 +56,7 @@ defmodule OpenAperture.Router.ReverseProxy.Test do
       {:ok, :pid, 1}
     end)
 
-    :meck.expect(Client, :send_reply, 4, {:ok, :req8, 100})
+    :meck.expect(Client, :send_reply, 4, {:req8, 100})
 
     send(self, {:backend_request_initial_response, :pid, 200, "OK", [{"content-type", "text/plain"}], 100})
     send(self, {:backend_request_done, :pid, 100})

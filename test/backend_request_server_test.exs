@@ -33,7 +33,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
       {result, _time} = BackendRequestServer.start_request(pid, :get, get_httparrot_http_base_url, [], false)
       assert result == :ok
 
-      assert_receive({:backend_request_initial_response, ^pid, status, _reason, _headers})
+      assert_receive({:backend_request_initial_response, ^pid, status, _reason, _headers, _duration})
       assert status == 200
 
       assert_receive({:backend_request_response_chunk, ^pid, _chunk})
@@ -52,7 +52,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
       {result, _time} = BackendRequestServer.send_request_chunk(pid, "the last chunk\n", true)
       assert result == :ok
 
-      assert_receive({:backend_request_initial_response, ^pid, status, _reason, _headers})
+      assert_receive({:backend_request_initial_response, ^pid, status, _reason, _headers, _duration})
       assert status == 200
 
       assert_receive({:backend_request_response_chunk, ^pid, _chunk})
@@ -64,7 +64,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
       error = "An error message!!!!"
       send pid, {:hackney_response, :a_client_ref, {:error, error}}
 
-      assert_receive({:backend_request_error, ^pid, ^error})
+      assert_receive({:backend_request_error, ^pid, ^error, _duration})
     end
   end
 
@@ -101,7 +101,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
         send pid, {:hackney_response, :client, {:status, 200, "OK"}}
         send pid, {:hackney_response, :client, {:headers, headers}}
 
-        assert_receive({:backend_request_initial_response, ^pid, 200, "OK", ^headers})
+        assert_receive({:backend_request_initial_response, ^pid, 200, "OK", ^headers, _duration})
         assert Process.alive?(pid)
       end
 
@@ -129,7 +129,7 @@ defmodule OpenAperture.Router.BackendRequestServer.Test do
         error = "OH NO!"
         send pid, {:hackney_response, :client, {:error, error}}
 
-        assert_receive({:backend_request_error, ^pid, ^error})
+        assert_receive({:backend_request_error, ^pid, ^error, _duration})
         assert Process.alive?(pid)
       end
     end

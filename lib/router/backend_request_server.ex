@@ -107,22 +107,23 @@ defmodule OpenAperture.Router.BackendRequestServer do
     Logger.debug("Client #{inspect client_ref} received response headers: #{inspect headers}")
     # Send info to the parent reverse proxy process with the initial response data
     response = state[:response]
-    send(parent, {:backend_request_initial_response, self, response[:status_code], response[:reason], headers})
+    duration = get_request_duration(state[:request_start])
+    send(parent, {:backend_request_initial_response, self, response[:status_code], response[:reason], headers, duration})
     # We don't need that response map anymore, so ditch it
     {:noreply, Map.delete(state, :response)}
   end
 
   def handle_info({:hackney_response, client_ref, :done}, %{parent_pid: parent} = state) do
-    now = :os.timestamp
     Logger.debug("Client #{inspect client_ref} received hackney message indicating the request has completed. Shutting down BackendRequestServer GenServer...")
-    duration = :timer.now_diff(now, state[:request_start])
+    duration = get_request_duration(state[:request_start])
     send(parent, {:backend_request_done, self, duration})
     {:stop, :normal, state}
   end
 
   def handle_info({:hackney_response, client_ref, {:error, error}}, %{parent_pid: parent} = state) do
     Logger.error("Client #{inspect client_ref} received hackney error: #{inspect error}")
-    send(parent, {:backend_request_error, self, error})
+    duration = get_request_duration(state[:request_start])
+    send(parent, {:backend_request_error, self, error, duration})
     {:noreply, state}
   end
 
@@ -134,5 +135,11 @@ defmodule OpenAperture.Router.BackendRequestServer do
   def handle_info(msg, state) do
     Logger.debug "Response Handler server received an unexpected message: #{inspect msg}"
     {:noreply, state}
+  end
+
+  defp get_request_duration(start) when is_nil(start), do: 0
+
+  defp get_request_duration(start_timestamp) do
+    :timer.now_diff(:os.timestamp, start_timestamp)
   end
 end

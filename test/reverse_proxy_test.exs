@@ -59,8 +59,8 @@ defmodule OpenAperture.Router.ReverseProxy.Test do
       {:ok, :pid, 1}
     end)
 
-    :meck.expect :cowboy_req, :set_meta, [{[:response_type, :buffered, :req7], :req8}]
-    :meck.expect(BufferedResponseBodyHandler, :handle, 4, {:ok, :req9, 200})
+    :meck.expect :cowboy_req, :set_meta, [{[:response_type, :streaming, :req7], :req8}]
+    :meck.expect Client, :send_reply, [{[:req8, "200 OK", :_], {:req9, 100}}]
 
     send(self, {:backend_request_initial_response, :pid, 200, "OK", [{"content-type", "text/plain"}], 100})
     send(self, {:backend_request_done, :pid, 100})

@@ -14,9 +14,6 @@ defmodule OpenAperture.Router.ReverseProxy.StreamingResponseBodyHandler do
   #@doc handle_streaming_response_body()
   def handle(socket, transport) do
     timeout = Keyword.get(@timeouts, :receiving_response, 5_000)
-    # IO.puts "in handle_streaming_response_body"
-    # IO.puts "socket: #{inspect socket}"
-    # IO.puts "transport: #{inspect transport}"
 
     receive do
       {:backend_request_error, _backend_request_server_pid, _reason, backend_duration} ->
@@ -34,6 +31,8 @@ defmodule OpenAperture.Router.ReverseProxy.StreamingResponseBodyHandler do
         # Cowboy should close the connection for us, so all we should need to
         # do here is return, closing out the message loop.
         :ok
+
+    after timeout -> :timeout
     end
   end
 end

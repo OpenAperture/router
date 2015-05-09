@@ -1,7 +1,6 @@
 defmodule OpenAperture.Router.HttpHandler do
   require Logger
 
-  import OpenAperture.Router.HttpRequestUtil
   import OpenAperture.Router.Util
 
   alias OpenAperture.Router.ReverseProxy

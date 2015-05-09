@@ -29,10 +29,14 @@ defmodule OpenAperture.Router.ReverseProxy.ChunkedResponseBodyHandler do
         {:error, req, backend_duration}
 
       {:backend_request_response_chunk, ^backend_request_server_pid, chunk} ->
-        {_result, _send_time} = Client.send_response_body_chunk(req, chunk)
-
-        # Recursively loop back into this handler until we're done.
-        handle(req, backend_request_server_pid)
+        case Client.send_response_body_chunk(req, chunk) do
+          {:error, _send_time} ->
+            # TODO: Retry?
+            {:error, req, 0}
+          {:ok, _send_time} ->
+            # Recursively loop back into this handler until we're done.
+            handle(req, backend_request_server_pid)
+        end
 
       {:backend_request_done, ^backend_request_server_pid, backend_duration} ->
         # Cowboy should close the connection for us, so all we should need to

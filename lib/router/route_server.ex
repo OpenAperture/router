@@ -25,8 +25,10 @@ defmodule OpenAperture.Router.RouteServer do
     # updated.
     Agent.start_link(fn -> nil end, name: __MODULE__)
 
-    # Try to load all the routes at startup
-    spawn(fn -> load_all_routes end)
+    # Try to load all the routes at startup, but not if we're running tests
+    unless Application.get_env(:openaperture_router, :env) == :test do
+      spawn(fn -> load_all_routes end)
+    end
 
     updater_pid = spawn_link(fn -> update_routes end)
 

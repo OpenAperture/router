@@ -6,6 +6,8 @@ defmodule OpenAperture.Router.RouteServer.Test do
 
   setup do
     :meck.new :hackney
+    :meck.new OpenAperture.Auth.Client, [:passthrough]
+    :meck.expect OpenAperture.Auth.Client, :get_token, 3, "abc"
 
     Agent.update(OpenAperture.Router.RouteServer, fn _s -> nil end)
 

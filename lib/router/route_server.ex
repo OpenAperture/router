@@ -209,9 +209,7 @@ defmodule OpenAperture.Router.RouteServer do
 
   @spec get_auth_header :: {String.t, String.t}
   defp get_auth_header() do
-    #token = OpenAperture.Auth.Client.get_token("https://idp-staging.psft.co/oauth/token", "106b9b61ff7210bea54eb0328791c28fe95e274f076707c30f7614cc5e3242cc", "1e14aba66983a24fcad9fe56b053fd4e06114b54c44e137f014bd3541c29dded")
-    #token = OpenAperture.Auth.Client.get_token("http://idp-staging.psft.co/oauth/token", Application.get_env(:openaperture_router, :client_id), Application.get_env(:openaperture_router, :client_secret))
-    token = "abc"
+    token = OpenAperture.Auth.Client.get_token(Application.get_env(:openaperture_router, :oauth_url), Application.get_env(:openaperture_router, :client_id), Application.get_env(:openaperture_router, :client_secret))
 
     {"Authorization", "Bearer #{token}"}
   end

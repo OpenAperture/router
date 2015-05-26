@@ -49,8 +49,8 @@ defmodule OpenAperture.Router.ReverseProxy do
     case RouteCache.get_route_for_authority(host, port, path) do
       nil ->
         # There aren't any routes defined for this host, so just bail.
-        {result, req, _reply_time} = send_reply(req, "503", [], "")
-        {result, req, 0}
+        {req, _reply_time} = send_reply(req, "503 Service Unavailable", [], "")
+        {:ok, req, 0}
       {backend_host, backend_port, is_https} ->
         {method, req} = get_request_method(req)
         {headers, req} = :cowboy_req.headers(req)

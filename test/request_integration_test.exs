@@ -107,6 +107,11 @@ defmodule OpenAperture.Router.RequestIntegrationTest do
     assert %{"a" => "a_value", "b" => "b_value"} == body["args"]
   end
 
+  test "GET test to bad host" do
+    {:ok, response} = request(:get, "http://127.0.0.1:8080/manager/html")
+    assert response.status_code == 503
+  end
+
   # HTTParrot's /stream/:n endpoint will stream 
   # (with transfer-encoding: chunked) n response body objects.
 

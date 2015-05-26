@@ -31,7 +31,7 @@ defmodule OpenAperture.Router.ReverseProxy.Test do
     :meck.expect :cowboy_req, :host, 1, {"test.com", :req1}
     :meck.expect :cowboy_req, :port, 1, {80, :req2}
     :meck.expect RouteCache, :get_route_for_authority, [{["test.com", 80, :_], nil}]
-    :meck.expect Client, :send_reply, [{[:req2, "503", [], ""], {:ok, :req3, 0}}]
+    :meck.expect Client, :send_reply, [{[:req2, "503 Service Unavailable", [], ""], {:req3, 0}}]
 
     result = proxy_request(:req, "/", :https)
       assert result == {:ok, :req3, 0}

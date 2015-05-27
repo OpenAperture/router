@@ -28,6 +28,8 @@ defmodule OpenAperture.Router.Mixfile do
 
   defp deps do
     [
+      {:ex_doc, "0.7.3", only: :test},
+      {:earmark, "0.1.17", only: :test},
       {:cowboy, "1.0.0"},
       {:hackney, "1.0.6"},
       {:con_cache, "0.7.0"},

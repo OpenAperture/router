@@ -8,10 +8,10 @@ defmodule OpenAperture.Router.ReverseProxy.ChunkedResponseBodyHandler do
 
   # Read the timeouts info from the env config
   @timeouts Application.get_env(:openaperture_router, :timeouts, [
-    connecting: 5_000,
-    sending_request_body: 60_000,
-    waiting_for_response: 60_000,
-    receiving_response: 60_000
+    connecting:            5_000,
+    sending_request_body:  60_000,
+    waiting_for_response:  60_000,
+    receiving_response:    60_000
     ])
 
   @doc """

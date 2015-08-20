@@ -198,7 +198,7 @@ defmodule OpenAperture.Router.RouteServer do
     end
   end
 
-  @spec format_routes([{String.t, Map.t}]) :: [{String.t, {String.t, integer, boolean}}]
+  @spec format_routes([{String.t, map}]) :: [{String.t, {String.t, integer, boolean}}]
   defp format_routes(routes) do
     Enum.map(routes, fn {authority, authority_routes} ->
       tuples = Enum.map(authority_routes, fn route ->

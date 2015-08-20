@@ -6,7 +6,7 @@ defmodule OpenAperture.Router.Util do
 
   alias OpenAperture.Router.Types
 
-  @mega = 1_000_000
+  @mega 1_000_000
 
   @doc """
   Converts an erlang timestamp to a unix timestamp. Erlang timestamps are of

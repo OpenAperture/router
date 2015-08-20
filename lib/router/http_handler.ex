@@ -81,7 +81,7 @@ defmodule OpenAperture.Router.HttpHandler do
   def terminate(_reason, _req, {_transport, {start_time, req_time}}) do
     total_time = :timer.now_diff(:os.timestamp(), start_time)
 
-    total_time_ms = div(total_time, 1000)
+    total_time_ms  = div(total_time, 1000)
     router_time_ms = div(total_time - req_time, 1000)
 
     Logger.info "Total request time (time in router): #{total_time_ms}ms (#{router_time_ms}ms)."
@@ -132,7 +132,7 @@ defmodule OpenAperture.Router.HttpHandler do
   defp handle_request(req, path, transport) do
     proto = case transport do
       :ssl -> :https
-      _ -> :http
+      _    -> :http
     end
 
     ReverseProxy.proxy_request(req, path, proto)

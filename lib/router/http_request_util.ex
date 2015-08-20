@@ -18,14 +18,14 @@ defmodule OpenAperture.Router.HttpRequestUtil do
     {method, req} = :cowboy_req.method(req)
 
     method = case String.upcase(method) do
-          "DELETE" -> :delete
-          "GET" -> :get
-          "HEAD" -> :head
+          "DELETE"  -> :delete
+          "GET"     -> :get
+          "HEAD"    -> :head
           "OPTIONS" -> :options
-          "PATCH" -> :patch
-          "POST" -> :post
-          "PUT" -> :put
-          _ -> 
+          "PATCH"   -> :patch
+          "POST"    -> :post
+          "PUT"     -> :put
+          _         ->
             # TODO: Figure out how we want to handle non-standard verbs.
             # We'll probably have to do something whitelist-based. We
             # **MUST NOT** just call `String.to_atom\1`, for reasons outlined
@@ -41,7 +41,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   The key feature of the router's reverse-proxying ability is taking a request
   to http://[public hostname]:[public port]/path?querystring and forwarding it
   to http://[backend hostname]:[backend port]/path?querystring.
-  This function takes the original request URL's host and port and replaces 
+  This function takes the original request URL's host and port and replaces
   them with the backend's host and port, as well as specifying if the backend
   request needs to be made via https or http.
   """
@@ -50,11 +50,10 @@ defmodule OpenAperture.Router.HttpRequestUtil do
     {host_url, req} = :cowboy_req.host_url(req)
     {url, req} = :cowboy_req.url(req)
 
-    proto = if https? do
-      "https"
-    else
-      "http"
-    end
+    proto = case https? do
+              true -> "https"
+              _    -> "http"
+            end
 
     new_url = Regex.replace(~r/^#{host_url}/, url, "#{proto}://#{backend_host}:#{backend_port}")
     {new_url, req}
@@ -67,7 +66,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
     headers
       |> Enum.any?(fn {key, value} ->
         # We have to do a case-insensitive check, because although the RFC states
-        # that headers should be all lowercase, many servers send it as 
+        # that headers should be all lowercase, many servers send it as
         # "Transfer-Encoding".
         if String.downcase(key) == "transfer-encoding" do
           # If there is a transfer-encoding header, check if its value matches
@@ -94,7 +93,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   end
 
   @doc """
-  Finds the first "content-length" header and returns it, Returns nil if 
+  Finds the first "content-length" header and returns it, Returns nil if
   there isn't one.
   """
   @spec get_content_length_header(Types.headers) :: {String.t, String.t} | nil
@@ -113,7 +112,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   def parse_content_length_header({_, val}) when is_binary(val) do
     case Integer.parse(val) do
       {num, _} -> num
-      _ -> nil
+      _        -> nil
     end
   end
 

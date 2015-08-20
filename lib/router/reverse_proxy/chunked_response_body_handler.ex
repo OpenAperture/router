@@ -4,15 +4,11 @@ defmodule OpenAperture.Router.ReverseProxy.ChunkedResponseBodyHandler do
   """
 
   alias OpenAperture.Router.ReverseProxy.Client
+  alias OpenAperture.Router.Timeouts
   alias OpenAperture.Router.Types
 
   # Read the timeouts info from the env config
-  @timeouts Application.get_env(:openaperture_router, :timeouts, [
-    connecting: 5_000,
-    sending_request_body: 60_000,
-    waiting_for_response: 60_000,
-    receiving_response: 60_000
-    ])
+  @timeouts Timeouts.from_env
 
   @doc """
   Handles chunks coming from the backend server and forwards them on to the

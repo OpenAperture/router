@@ -4,7 +4,7 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
   functionality.
   """
   require Logger
-  
+
   alias OpenAperture.Router.BackendRequestServer
   alias OpenAperture.Router.Types
 
@@ -15,7 +15,7 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
     waiting_for_response: 60_000,
     receiving_response: 60_000
     ])
-  
+
   @doc """
   Sends the request body from the client to the backend server.
   """
@@ -97,7 +97,7 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
 
   @doc """
   Adds OpenAperture Router-specific request headers, which can be used by the
-  backend servers to get information regarding the original request. Because 
+  backend servers to get information regarding the original request. Because
   the router proxies the request, many of the normal versions of these headers
   will be set with router-specific information, which might not be especially
   useful for the backend server. The added headers are:
@@ -111,16 +111,16 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
   @spec add_router_request_headers(Types.headers, String.t, integer, Types.cowboy_req, :http | :https) :: {Types.headers, Types.cowboy_req}
   def add_router_request_headers(headers, host, port, req, proto) when is_list(headers) do
     x_openaperture_request_id_header = List.keyfind(headers, "x-openaperture-request-id", 0)
-    x_forwarded_for_header = List.keyfind(headers, "x-forwarded-for", 0)
-    x_forwarded_host_header = List.keyfind(headers, "x-forwarded-host", 0)
-    x_forwarded_port_header = List.keyfind(headers, "x-forwarded-port", 0)
+    x_forwarded_for_header   = List.keyfind(headers, "x-forwarded-for", 0)
+    x_forwarded_host_header  = List.keyfind(headers, "x-forwarded-host", 0)
+    x_forwarded_port_header  = List.keyfind(headers, "x-forwarded-port", 0)
     x_forwarded_proto_header = List.keyfind(headers, "x-forwarded-proto", 0)
 
-    headers = if x_openaperture_request_id_header == nil, do: add_request_id_header(headers), else: headers
-    {headers, req} = if x_forwarded_for_header == nil, do: add_forwarded_for_header(headers, req), else: {headers, req}
-    headers = if x_forwarded_host_header == nil, do: add_forwarded_host_header(headers, host), else: headers
-    headers = if x_forwarded_port_header == nil, do: add_forwarded_port_header(headers, port), else: headers
-    headers = if x_forwarded_proto_header == nil, do: add_forwarded_proto_header(headers, proto), else: headers
+    headers =        if x_openaperture_request_id_header == nil, do: add_request_id_header(headers),             else: headers
+    {headers, req} = if x_forwarded_for_header == nil,           do: add_forwarded_for_header(headers, req),     else: {headers, req}
+    headers =        if x_forwarded_host_header == nil,          do: add_forwarded_host_header(headers, host),   else: headers
+    headers =        if x_forwarded_port_header == nil,          do: add_forwarded_port_header(headers, port),   else: headers
+    headers =        if x_forwarded_proto_header == nil,         do: add_forwarded_proto_header(headers, proto), else: headers
 
     {headers, req}
   end

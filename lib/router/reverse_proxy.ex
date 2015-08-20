@@ -36,7 +36,7 @@ defmodule OpenAperture.Router.ReverseProxy do
     # We can't, hoever, process parts of the client request (using the
     # :cowboy_req module), in that other process, as the cowboy documentation
     # states:
-    # "It is highly discouraged to pass the Req object to another process. 
+    # "It is highly discouraged to pass the Req object to another process.
     # Doing so and calling `cowboy_req` functions from it leads to undefined
     # behavior." (http://ninenines.eu/docs/en/cowboy/1.0/manual/cowboy_req/)
     #
@@ -52,7 +52,7 @@ defmodule OpenAperture.Router.ReverseProxy do
         {req, _reply_time} = send_reply(req, "503 Service Unavailable", [], "")
         {:ok, req, 0}
       {backend_host, backend_port, is_https} ->
-        {method, req} = get_request_method(req)
+        {method, req}  = get_request_method(req)
         {headers, req} = :cowboy_req.headers(req)
 
         # Add any custom headers needed...
@@ -66,11 +66,7 @@ defmodule OpenAperture.Router.ReverseProxy do
   def proxy_request(method, req, host, port, is_https, headers) do
     {url, req} = get_backend_url(req, host, port, is_https)
 
-    has_body = Enum.any?(headers, fn {header, _value} ->
-      header = String.downcase(header)
-      header == "content-length" || header == "transfer-encoding"
-    end)
-
+    has_body = has_body?(headers)
     # Start performing the backend request in a separate process
     case start_request(method, url, headers, has_body) do
       {:error, _reason, request_time} ->
@@ -90,6 +86,14 @@ defmodule OpenAperture.Router.ReverseProxy do
           handle_response(req, backend_request_server_pid)
         end
     end
+  end
+
+  @spec has_body?(Types.headers) :: boolean
+  defp has_body?(headers) do
+    Enum.any?(headers, fn {header, _value} ->
+      header = String.downcase(header)
+      header == "content-length" || header == "transfer-encoding"
+    end)
   end
 
   @spec handle_response(Types.cowboy_req, pid) :: {:ok, Types.cowboy_req, integer} | {:error, Types.cowboy_req, integer}
@@ -117,7 +121,7 @@ defmodule OpenAperture.Router.ReverseProxy do
             _ ->
               # Handling the streaming response is done in two parts. Here, we
               # initiate the reply, with our custom request object metadata of
-              # `:response_type` set to `:streaming`. In 
+              # `:response_type` set to `:streaming`. In
               # `HttpHandler.onresponse/4`, we'll check that metadata, see that
               # it's set to `:streaming`, and call the streaming response body
               # handler.

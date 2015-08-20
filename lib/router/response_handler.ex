@@ -20,12 +20,12 @@ defmodule OpenAperture.Router.ResponseHandler do
   defp message_loop(backend_request_pid, state \\ %{}) do
     receive do
       {:hackney_response, _client_ref, {:status, status_code, reason}} ->
-        state = Map.merge(state, 
+        state = Map.merge(state,
           %{
-            status_code: status_code,
+            status_code:   status_code,
             status_reason: reason
           })
-        
+
         message_loop(backend_request_pid, state)
 
       {:hackney_response, _client_ref, {:headers, headers}} ->

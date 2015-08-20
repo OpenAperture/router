@@ -3,14 +3,9 @@ defmodule OpenAperture.Router.ReverseProxy.StreamingResponseBodyHandler do
   This module contains the handler for processing streaming response bodies.
   """
 
-  # Read the timeouts info from the env config
-  @timeouts Application.get_env(:openaperture_router, :timeouts, [
-    connecting:            5_000,
-    sending_request_body:  60_000,
-    waiting_for_response:  60_000,
-    receiving_response:    60_000
-    ])
-  # TODO: this seems redundant with the version in chunked. Pull up somewhere?
+  alias OpenAperture.Router.Timeouts
+
+  @timeouts Timeouts.from_env
 
   #@doc handle_streaming_response_body()
   def handle(socket, transport) do

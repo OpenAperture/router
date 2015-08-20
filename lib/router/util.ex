@@ -97,11 +97,11 @@ defmodule OpenAperture.Router.Util do
         # Check if we're hitting a local endpoint, in which case we can't use
         # the proxy
         cond do
-          String.starts_with?(url, "https") -> []
+          String.starts_with?(url, "https")            -> []
           String.starts_with?(url, "http://localhost") -> []
           String.starts_with?(url, "http://127.0.0.1") -> []
-          String.starts_with?(url, "http://lvh.me") -> []
-          true -> conf
+          String.starts_with?(url, "http://lvh.me")    -> []
+          true                                         -> conf
         end
     end
   end

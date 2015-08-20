@@ -22,7 +22,7 @@ defmodule OpenAperture.Router.ResponseHandler do
       {:hackney_response, _client_ref, {:status, status_code, reason}} ->
         state = Map.merge(state,
           %{
-            status_code: status_code,
+            status_code:   status_code,
             status_reason: reason
           })
 

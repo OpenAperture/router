@@ -13,6 +13,7 @@ defmodule OpenAperture.Router.ReverseProxy.ChunkedResponseBodyHandler do
     waiting_for_response:  60_000,
     receiving_response:    60_000
     ])
+  # TODO: this seems redundant with the version in buffered. Pull up somewhere?
 
   @doc """
   Handles chunks coming from the backend server and forwards them on to the

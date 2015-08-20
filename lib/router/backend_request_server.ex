@@ -52,11 +52,10 @@ defmodule OpenAperture.Router.BackendRequestServer do
     hackney_options = [:async, {:stream_to, self}]
     hackney_options = get_hackney_options(url) ++ hackney_options
 
-    if has_request_body do
-      {time, result} = :timer.tc(:hackney, :request, [method, url, request_headers, :stream, hackney_options])
-    else
-      {time, result} = :timer.tc(:hackney, :request, [method, url, request_headers, "", hackney_options])
-    end
+    {time, result} =  case has_request_body do
+                        true  -> :timer.tc(:hackney, :request, [method, url, request_headers, :stream, hackney_options])
+                        _     -> :timer.tc(:hackney, :request, [method, url, request_headers, "", hackney_options])
+                      end
 
     state = Map.put(state, :request_start, :os.timestamp)
 
@@ -75,7 +74,7 @@ defmodule OpenAperture.Router.BackendRequestServer do
   def handle_call({:send_request_chunk, chunk, false}, _from, %{hackney_client: client} = state) do
     {time, result} = :timer.tc(:hackney, :send_body, [client, chunk])
     case result do
-      :ok -> {:reply, {:ok, time}, state}
+      :ok              -> {:reply, {:ok, time}, state}
       {:error, reason} -> {:reply, {:error, reason, time}, state}
     end
   end
@@ -89,7 +88,7 @@ defmodule OpenAperture.Router.BackendRequestServer do
       :ok ->
         {response_time, result} = :timer.tc(:hackney, :start_response, [client])
         case result do
-          {:ok, client} -> {:reply, {:ok, time + response_time}, %{state | hackney_client: client}}
+          {:ok, client}    -> {:reply, {:ok, time + response_time}, %{state | hackney_client: client}}
           {:error, reason} -> {:reply, {:error, reason, time + response_time}, state}
         end
       {:error, reason} -> {:reply, {:error, reason, time}, state}

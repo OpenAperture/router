@@ -78,10 +78,8 @@ defmodule OpenAperture.Router.RouteServer do
 
         timestamp ->
           case handle_deleted_routes(timestamp) do
-            :ok ->
-              handle_updated_routes(timestamp)
-            {:error, error} ->
-              Logger.error "Error handling deleted routes: #{inspect error}"
+            :ok             -> handle_updated_routes(timestamp)
+            {:error, error} -> Logger.error "Error handling deleted routes: #{inspect error}"
           end
       end
     end
@@ -149,8 +147,7 @@ defmodule OpenAperture.Router.RouteServer do
         case :hackney.body(client) do
           {:ok, body} ->
             case Poison.decode(body) do
-              {:ok, specs} ->
-                {:ok, specs}
+              {:ok, specs}  -> {:ok, specs}
               {:error, err} ->
                 Logger.error "Could not decode JSON response from #{url}: #{inspect err}"
                 {:error, err}

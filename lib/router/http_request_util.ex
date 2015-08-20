@@ -18,14 +18,14 @@ defmodule OpenAperture.Router.HttpRequestUtil do
     {method, req} = :cowboy_req.method(req)
 
     method = case String.upcase(method) do
-          "DELETE" -> :delete
-          "GET" -> :get
-          "HEAD" -> :head
+          "DELETE"  -> :delete
+          "GET"     -> :get
+          "HEAD"    -> :head
           "OPTIONS" -> :options
-          "PATCH" -> :patch
-          "POST" -> :post
-          "PUT" -> :put
-          _ ->
+          "PATCH"   -> :patch
+          "POST"    -> :post
+          "PUT"     -> :put
+          _         ->
             # TODO: Figure out how we want to handle non-standard verbs.
             # We'll probably have to do something whitelist-based. We
             # **MUST NOT** just call `String.to_atom\1`, for reasons outlined
@@ -50,11 +50,10 @@ defmodule OpenAperture.Router.HttpRequestUtil do
     {host_url, req} = :cowboy_req.host_url(req)
     {url, req} = :cowboy_req.url(req)
 
-    proto = if https? do
-      "https"
-    else
-      "http"
-    end
+    proto = case https? do
+              true -> "https"
+              _    -> "http"
+            end
 
     new_url = Regex.replace(~r/^#{host_url}/, url, "#{proto}://#{backend_host}:#{backend_port}")
     {new_url, req}
@@ -113,7 +112,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   def parse_content_length_header({_, val}) when is_binary(val) do
     case Integer.parse(val) do
       {num, _} -> num
-      _ -> nil
+      _        -> nil
     end
   end
 

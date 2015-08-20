@@ -6,6 +6,8 @@ defmodule OpenAperture.Router.Util do
 
   alias OpenAperture.Router.Types
 
+  @mega = 1_000_000
+
   @doc """
   Converts an erlang timestamp to a unix timestamp. Erlang timestamps are of
   the form {MegaSecs, Secs, MicroSecs}, of the elapsed time since the start of
@@ -21,7 +23,7 @@ defmodule OpenAperture.Router.Util do
     # Unix time only counts seconds, disregard microseconds
     {mega, secs, _} = erlang_timestamp
 
-    mega * 1_000_000 + secs
+    mega * @mega + secs
   end
 
   @doc """
@@ -35,7 +37,7 @@ defmodule OpenAperture.Router.Util do
   """
   @spec erlang_timestamp_to_microseconds(Types.erlang_timestamp) :: integer
   def erlang_timestamp_to_microseconds({megaSecs, secs, microSecs}) do
-    megaSecs * 1_000_000 * 1_000_000 + secs * 1_000_000 + microSecs
+    megaSecs * @mega * @mega + secs * @mega + microSecs
   end
 
   @doc """
@@ -49,11 +51,11 @@ defmodule OpenAperture.Router.Util do
   """
   @spec microseconds_to_erlang_timestamp(integer) :: Types.erlang_timestamp
   def microseconds_to_erlang_timestamp(integer) do
-    megas = div(integer, 1_000_000 * 1_000_000)
+    megas = div(integer, @mega * @mega)
     secs = integer
-           |> div(1_000_000)
-           |> rem(1_000_000)
-    micros = rem(integer, 1_000_000)
+           |> div(@mega)
+           |> rem(@mega)
+    micros = rem(integer, @mega)
 
     {megas, secs, micros}
   end

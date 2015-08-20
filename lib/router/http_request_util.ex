@@ -25,7 +25,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
           "PATCH" -> :patch
           "POST" -> :post
           "PUT" -> :put
-          _ -> 
+          _ ->
             # TODO: Figure out how we want to handle non-standard verbs.
             # We'll probably have to do something whitelist-based. We
             # **MUST NOT** just call `String.to_atom\1`, for reasons outlined
@@ -41,7 +41,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   The key feature of the router's reverse-proxying ability is taking a request
   to http://[public hostname]:[public port]/path?querystring and forwarding it
   to http://[backend hostname]:[backend port]/path?querystring.
-  This function takes the original request URL's host and port and replaces 
+  This function takes the original request URL's host and port and replaces
   them with the backend's host and port, as well as specifying if the backend
   request needs to be made via https or http.
   """
@@ -67,7 +67,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
     headers
       |> Enum.any?(fn {key, value} ->
         # We have to do a case-insensitive check, because although the RFC states
-        # that headers should be all lowercase, many servers send it as 
+        # that headers should be all lowercase, many servers send it as
         # "Transfer-Encoding".
         if String.downcase(key) == "transfer-encoding" do
           # If there is a transfer-encoding header, check if its value matches
@@ -94,7 +94,7 @@ defmodule OpenAperture.Router.HttpRequestUtil do
   end
 
   @doc """
-  Finds the first "content-length" header and returns it, Returns nil if 
+  Finds the first "content-length" header and returns it, Returns nil if
   there isn't one.
   """
   @spec get_content_length_header(Types.headers) :: {String.t, String.t} | nil

@@ -4,7 +4,7 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
   functionality.
   """
   require Logger
-  
+
   alias OpenAperture.Router.BackendRequestServer
   alias OpenAperture.Router.Types
 
@@ -15,7 +15,7 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
     waiting_for_response: 60_000,
     receiving_response: 60_000
     ])
-  
+
   @doc """
   Sends the request body from the client to the backend server.
   """
@@ -97,7 +97,7 @@ defmodule OpenAperture.Router.ReverseProxy.Client do
 
   @doc """
   Adds OpenAperture Router-specific request headers, which can be used by the
-  backend servers to get information regarding the original request. Because 
+  backend servers to get information regarding the original request. Because
   the router proxies the request, many of the normal versions of these headers
   will be set with router-specific information, which might not be especially
   useful for the backend server. The added headers are:

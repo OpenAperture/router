@@ -36,7 +36,7 @@ defmodule OpenAperture.Router.ReverseProxy do
     # We can't, hoever, process parts of the client request (using the
     # :cowboy_req module), in that other process, as the cowboy documentation
     # states:
-    # "It is highly discouraged to pass the Req object to another process. 
+    # "It is highly discouraged to pass the Req object to another process.
     # Doing so and calling `cowboy_req` functions from it leads to undefined
     # behavior." (http://ninenines.eu/docs/en/cowboy/1.0/manual/cowboy_req/)
     #
@@ -117,7 +117,7 @@ defmodule OpenAperture.Router.ReverseProxy do
             _ ->
               # Handling the streaming response is done in two parts. Here, we
               # initiate the reply, with our custom request object metadata of
-              # `:response_type` set to `:streaming`. In 
+              # `:response_type` set to `:streaming`. In
               # `HttpHandler.onresponse/4`, we'll check that metadata, see that
               # it's set to `:streaming`, and call the streaming response body
               # handler.

@@ -22,7 +22,7 @@ defmodule OpenAperture.Router.RouteCache do
     Logger.debug "Routes matching #{host}:#{port}: #{inspect routes}"
 
     case routes do
-      nil -> nil
+      nil          -> nil
       [route | []] -> route
       routes ->
         index = :random.uniform(length(routes)) - 1
